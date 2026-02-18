@@ -11,7 +11,7 @@
     "properties": {
       "workerUrl": {
         "type": "string",
-        "default": "https://atlas-memory-worker.srvcflo.workers.dev",
+        "default": "",
         "description": "URL of the memory worker"
       },
       "autoRecall": {
@@ -37,7 +37,7 @@
     }
   },
   "uiHints": {
-    "workerUrl": { "label": "Worker URL", "placeholder": "https://atlas-memory-worker.srvcflo.workers.dev" },
+    "workerUrl": { "label": "Worker URL", "placeholder": "https://your-worker.workers.dev" },
     "autoRecall": { "label": "Auto-Recall", "description": "Inject relevant memories before agent runs" },
     "autoCapture": { "label": "Auto-Capture", "description": "Store important info after agent runs" },
     "minRecallScore": { "label": "Min Recall Score", "description": "0-1 similarity threshold" },

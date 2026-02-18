@@ -352,7 +352,7 @@ export default {
       if (path === '/health' || path === '/') {
         return Response.json({
           status: 'ok',
-          service: 'atlas-memory-worker',
+          service: 'openclaw-memory-worker',
           timestamp: new Date().toISOString(),
         }, { headers: corsHeaders });
       }

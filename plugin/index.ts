@@ -4,7 +4,7 @@
  * Long-term memory with vector search using Cloudflare Vectorize + Workers AI.
  * Provides seamless auto-recall and auto-capture via lifecycle hooks.
  * 
- * Uses the atlas-memory-worker deployed at srvcflo.workers.dev
+ * Connects to your deployed memory worker.
  */
 
 import type { OpenClawPluginApi } from "openclaw/plugin-sdk";
@@ -168,7 +168,11 @@ const memoryVectorizePlugin = {
 
   register(api: OpenClawPluginApi) {
     const cfg = (api.pluginConfig || {}) as Partial<PluginConfig>;
-    const workerUrl = cfg.workerUrl ?? "https://atlas-memory-worker.srvcflo.workers.dev";
+    const workerUrl = cfg.workerUrl;
+    if (!workerUrl) {
+      api.logger.error("memory-vectorize: workerUrl is required in config");
+      return;
+    }
     const client = new VectorizeClient(workerUrl);
 
     // Get current agent ID from context

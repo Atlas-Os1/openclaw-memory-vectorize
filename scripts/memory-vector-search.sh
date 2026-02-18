@@ -11,7 +11,7 @@ AGENT="${2:-}"
 TOP_K="${3:-5}"
 MIN_SCORE="${4:-0.5}"
 
-WORKER_URL="https://atlas-memory-worker.srvcflo.workers.dev"
+WORKER_URL="${MEMORY_WORKER_URL:-https://your-worker.workers.dev}"
 
 if [ -z "$QUERY" ]; then
   echo "Usage: memory-vector-search.sh <query> [agent] [topK]"

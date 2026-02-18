@@ -4,7 +4,7 @@
 #
 # If no agent specified, indexes all agents
 
-WORKER_URL="https://atlas-memory-worker.srvcflo.workers.dev"
+WORKER_URL="${MEMORY_WORKER_URL:-https://your-worker.workers.dev}"
 AGENT="${1:-all}"
 
 index_agent() {
