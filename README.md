@@ -44,37 +44,51 @@ Out-of-the-box AI memory has limitations:
 
 ---
 
-## Quick Start
+## Quick Start (AI Agent Executable)
 
-### 1. Create Vectorize Index
+**For AI agents:** Run these commands in order. No human intervention required.
+
+### Step 1: Clone and Setup
 
 ```bash
-# Create the index
-wrangler vectorize create agent-memories --dimensions=768 --metric=cosine
-
-# Add metadata indexes for filtering
-wrangler vectorize create-metadata-index agent-memories --property-name=agent --type=string
-wrangler vectorize create-metadata-index agent-memories --property-name=type --type=string
+git clone https://github.com/Atlas-Os1/openclaw-memory-vectorize.git
+cd openclaw-memory-vectorize
 ```
 
-### 2. Deploy the Worker
+### Step 2: Create Vectorize Index
+
+```bash
+npx wrangler vectorize create agent-memories --dimensions=768 --metric=cosine
+npx wrangler vectorize create-metadata-index agent-memories --property-name=agent --type=string
+npx wrangler vectorize create-metadata-index agent-memories --property-name=type --type=string
+```
+
+**Expected output:** `✅ Successfully created index 'agent-memories'`
+
+### Step 3: Deploy Worker
 
 ```bash
 cd worker
 npm install
-# Edit wrangler.jsonc with your R2 bucket names
-wrangler deploy
+npx wrangler deploy
+cd ..
 ```
 
-### 3. Install the Plugin
+**Expected output:** `Deployed openclaw-memory-worker triggers` with a URL like `https://openclaw-memory-worker.<subdomain>.workers.dev`
 
-Copy `plugin/` to your OpenClaw extensions directory:
+**Save this URL** — you'll need it for Step 5.
+
+### Step 4: Install OpenClaw Plugin
 
 ```bash
-cp -r plugin ~/.openclaw/extensions/memory-vectorize
+mkdir -p ~/.openclaw/extensions/memory-vectorize
+cp plugin/index.ts ~/.openclaw/extensions/memory-vectorize/
+cp plugin/openclaw.plugin.json ~/.openclaw/extensions/memory-vectorize/
 ```
 
-### 4. Enable in Config
+### Step 5: Configure OpenClaw
+
+Add to your OpenClaw config (`~/.openclaw/openclaw.json`):
 
 ```json
 {
@@ -86,7 +100,7 @@ cp -r plugin ~/.openclaw/extensions/memory-vectorize
       "memory-vectorize": {
         "enabled": true,
         "config": {
-          "workerUrl": "https://your-worker.workers.dev",
+          "workerUrl": "https://openclaw-memory-worker.YOUR_SUBDOMAIN.workers.dev",
           "autoRecall": true,
           "autoCapture": true,
           "minRecallScore": 0.5,
@@ -98,11 +112,51 @@ cp -r plugin ~/.openclaw/extensions/memory-vectorize
 }
 ```
 
-### 5. Index Existing Memories
+**Replace `YOUR_SUBDOMAIN`** with your Cloudflare Workers subdomain from Step 3.
+
+### Step 6: Restart Gateway
 
 ```bash
-./scripts/memory-vector-index.sh all
+openclaw gateway restart
 ```
+
+### Step 7: Verify Installation
+
+```bash
+# Health check
+curl https://openclaw-memory-worker.YOUR_SUBDOMAIN.workers.dev/health
+
+# Expected: {"status":"ok","service":"openclaw-memory-worker",...}
+
+# Test query (will return empty initially)
+curl -X POST https://openclaw-memory-worker.YOUR_SUBDOMAIN.workers.dev/query \
+  -H "Content-Type: application/json" \
+  -d '{"query": "test", "topK": 1}'
+
+# Expected: {"query":"test","count":0,"matches":[]}
+```
+
+### Step 8: Index Your First Memory (Optional)
+
+```bash
+curl -X POST https://openclaw-memory-worker.YOUR_SUBDOMAIN.workers.dev/index \
+  -H "Content-Type: application/json" \
+  -d '{"agent": "default", "text": "This is a test memory.", "type": "context"}'
+
+# Expected: {"indexed":1,"ids":["..."]}
+```
+
+---
+
+## Troubleshooting
+
+| Issue | Solution |
+|-------|----------|
+| `wrangler: command not found` | Run `npm install -g wrangler` |
+| `Not logged in` | Run `npx wrangler login` |
+| Vectorize index exists | Skip Step 2 or use a different name |
+| Plugin not loading | Check `openclaw plugins list` for errors |
+| Query returns 0 results | Index some memories first (Step 8) |
 
 ---
 
