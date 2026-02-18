@@ -1,0 +1,26 @@
+{
+  "name": "openclaw-memory-worker",
+  "version": "1.0.0",
+  "description": "Cloudflare Worker for semantic memory with Vectorize + Workers AI",
+  "main": "src/index.ts",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "typecheck": "tsc --noEmit"
+  },
+  "keywords": [
+    "cloudflare",
+    "vectorize",
+    "workers-ai",
+    "memory",
+    "openclaw",
+    "ai-agents"
+  ],
+  "author": "Atlas-OS",
+  "license": "MIT",
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20260218.0",
+    "typescript": "^5.9.3",
+    "wrangler": "^4.66.0"
+  }
+}

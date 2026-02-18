@@ -1,0 +1,32 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "openclaw-memory-worker",
+  "main": "src/index.ts",
+  "compatibility_date": "2025-01-01",
+  "compatibility_flags": ["nodejs_compat"],
+  
+  // Vectorize binding for semantic search
+  "vectorize": [
+    {
+      "binding": "VECTORIZE",
+      "index_name": "agent-memories"
+    }
+  ],
+  
+  // Workers AI for embeddings
+  "ai": {
+    "binding": "AI"
+  },
+  
+  // R2 buckets for agent workspaces (customize these)
+  // Add your own buckets here
+  "r2_buckets": [
+    // { "binding": "R2_AGENT1", "bucket_name": "your-agent1-bucket" },
+    // { "binding": "R2_AGENT2", "bucket_name": "your-agent2-bucket" }
+  ],
+  
+  // Environment variables
+  "vars": {
+    "EMBEDDING_MODEL": "@cf/baai/bge-base-en-v1.5"
+  }
+}

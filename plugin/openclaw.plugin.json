@@ -1,0 +1,46 @@
+{
+  "id": "memory-vectorize",
+  "name": "Memory (Cloudflare Vectorize)",
+  "description": "Long-term memory with Cloudflare Vectorize + Workers AI. Seamless auto-recall and auto-capture.",
+  "version": "1.0.0",
+  "kind": "memory",
+  "main": "index.ts",
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "workerUrl": {
+        "type": "string",
+        "default": "https://atlas-memory-worker.srvcflo.workers.dev",
+        "description": "URL of the memory worker"
+      },
+      "autoRecall": {
+        "type": "boolean",
+        "default": true,
+        "description": "Automatically recall relevant memories before agent starts"
+      },
+      "autoCapture": {
+        "type": "boolean",
+        "default": true,
+        "description": "Automatically capture important info after agent ends"
+      },
+      "minRecallScore": {
+        "type": "number",
+        "default": 0.5,
+        "description": "Minimum similarity score for auto-recall"
+      },
+      "recallLimit": {
+        "type": "number",
+        "default": 3,
+        "description": "Max memories to inject on auto-recall"
+      }
+    }
+  },
+  "uiHints": {
+    "workerUrl": { "label": "Worker URL", "placeholder": "https://atlas-memory-worker.srvcflo.workers.dev" },
+    "autoRecall": { "label": "Auto-Recall", "description": "Inject relevant memories before agent runs" },
+    "autoCapture": { "label": "Auto-Capture", "description": "Store important info after agent runs" },
+    "minRecallScore": { "label": "Min Recall Score", "description": "0-1 similarity threshold" },
+    "recallLimit": { "label": "Recall Limit", "description": "Max memories to inject" }
+  }
+}
