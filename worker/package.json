@@ -18,6 +18,11 @@
   ],
   "author": "Atlas-OS",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Atlas-Os1/openclaw-memory-vectorize.git"
+  },
+  "homepage": "https://github.com/Atlas-Os1/openclaw-memory-vectorize#readme",
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20260218.0",
     "typescript": "^5.9.3",
