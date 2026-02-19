@@ -1,5 +1,7 @@
 # OpenClaw Memory Vectorize
 
+[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/Atlas-Os1/openclaw-memory-vectorize/tree/main/worker)
+
 **Semantic long-term memory for AI agents using Cloudflare Vectorize + Workers AI.**
 
 Auto-recalls relevant context before responses. Auto-captures decisions, corrections, and preferences. No "remember this" commands needed.
