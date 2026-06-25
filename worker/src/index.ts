@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Atlas Memory Worker
  * 
  * Semantic memory layer for agents using Cloudflare Vectorize + Workers AI.
@@ -8,9 +8,9 @@
 export interface Env {
   VECTORIZE: Vectorize;
   AI: Ai;
-  R2_DEV: R2Bucket;
-  R2_FLO: R2Bucket;
-  R2_COLLAB: R2Bucket;
+  R2_MEMORY: R2Bucket;
+  R2_FILES: R2Bucket;
+  // (third bucket removed; hermes uses R2_MEMORY + R2_FILES)
   EMBEDDING_MODEL: string;
   GATEWAY_TOKEN?: string;
 }
@@ -268,14 +268,14 @@ export default {
         // Get R2 bucket based on agent
         let bucket: R2Bucket;
         switch (body.agent) {
-          case 'dev': bucket = env.R2_DEV; break;
-          case 'flo': bucket = env.R2_FLO; break;
+          case 'cleo': bucket = env.R2_MEMORY; break;
+          case 'lilbeaver': bucket = env.R2_MEMORY; break;
           default:
-            return Response.json({ error: `Unknown agent: ${body.agent}` }, { status: 400, headers: corsHeaders });
+            bucket = env.R2_MEMORY; break; // any hermes agent shares the memory bucket
         }
 
         // Fetch file from R2
-        const obj = await bucket.get(body.file);
+        const obj = await bucket.get(body.agent + '/' + body.file);
         if (!obj) {
           return Response.json({ error: `File not found: ${body.file}` }, { status: 404, headers: corsHeaders });
         }

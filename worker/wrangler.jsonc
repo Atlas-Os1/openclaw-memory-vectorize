@@ -1,4 +1,4 @@
-{
+﻿{
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "openclaw-memory-worker",
   "main": "src/index.ts",
@@ -21,8 +21,8 @@
   // R2 buckets for agent workspaces (customize these)
   // Add your own buckets here
   "r2_buckets": [
-    // { "binding": "R2_AGENT1", "bucket_name": "your-agent1-bucket" },
-    // { "binding": "R2_AGENT2", "bucket_name": "your-agent2-bucket" }
+    { "binding": "R2_MEMORY", "bucket_name": "hermes-memory" },
+    { "binding": "R2_FILES", "bucket_name": "hermes-files" }
   ],
   
   // Environment variables
