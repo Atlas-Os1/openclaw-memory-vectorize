@@ -1,0 +1,5 @@
+name: openclaw-memory-vectorize
+version: 1.0.0
+description: "Cloudflare Worker + Vectorize long-term memory provider for Hermes agents."
+pip_dependencies:
+  - requests

@@ -4,7 +4,7 @@
 
 **Semantic long-term memory for AI agents using Cloudflare Vectorize + Workers AI.**
 
-Auto-recalls relevant context before responses. Auto-captures decisions, corrections, and preferences. No "remember this" commands needed.
+Auto-recalls relevant context before responses. Auto-captures decisions, corrections, and preferences. No "remember this" commands needed. The repo includes both an OpenClaw plugin and a Hermes `MemoryProvider` named `openclaw-memory-vectorize`.
 
 ![Cost](https://img.shields.io/badge/cost-~%246%2Fmo-green)
 ![Cloudflare](https://img.shields.io/badge/platform-Cloudflare-orange)
@@ -88,7 +88,35 @@ cp plugin/index.ts ~/.openclaw/extensions/memory-vectorize/
 cp plugin/openclaw.plugin.json ~/.openclaw/extensions/memory-vectorize/
 ```
 
-### Step 5: Configure OpenClaw
+### Step 5: Install Hermes Memory Provider
+
+For Hermes agents, install the repo as a user memory plugin:
+
+```bash
+mkdir -p "$HERMES_HOME/plugins/openclaw-memory-vectorize"
+cp __init__.py plugin.yaml "$HERMES_HOME/plugins/openclaw-memory-vectorize/"
+```
+
+Set the worker connection in the agent environment:
+
+```bash
+export OPENCLAW_MEMORY_WORKER_URL="https://openclaw-memory-worker.YOUR_SUBDOMAIN.workers.dev"
+export OPENCLAW_MEMORY_WORKER_TOKEN=""
+export OPENCLAW_MEMORY_AGENT_ID="cleo"   # or lilbeaver
+export OPENCLAW_MEMORY_RECALL_LIMIT="5"
+export OPENCLAW_MEMORY_MIN_SCORE="0.5"
+```
+
+Then set the Hermes memory provider:
+
+```yaml
+memory:
+  provider: openclaw-memory-vectorize
+```
+
+Restart the Hermes gateway after changing the provider. The provider registers two tools, `openclaw_memory_search` and `openclaw_memory_remember`, and also syncs completed turns through the worker.
+
+### Step 6: Configure OpenClaw
 
 Add to your OpenClaw config (`~/.openclaw/openclaw.json`):
 
@@ -116,13 +144,13 @@ Add to your OpenClaw config (`~/.openclaw/openclaw.json`):
 
 **Replace `YOUR_SUBDOMAIN`** with your Cloudflare Workers subdomain from Step 3.
 
-### Step 6: Restart Gateway
+### Step 7: Restart Gateway
 
 ```bash
 openclaw gateway restart
 ```
 
-### Step 7: Verify Installation
+### Step 8: Verify Installation
 
 ```bash
 # Health check
@@ -138,7 +166,7 @@ curl -X POST https://openclaw-memory-worker.YOUR_SUBDOMAIN.workers.dev/query \
 # Expected: {"query":"test","count":0,"matches":[]}
 ```
 
-### Step 8: Index Your First Memory (Optional)
+### Step 9: Index Your First Memory (Optional)
 
 ```bash
 curl -X POST https://openclaw-memory-worker.YOUR_SUBDOMAIN.workers.dev/index \
@@ -158,6 +186,8 @@ curl -X POST https://openclaw-memory-worker.YOUR_SUBDOMAIN.workers.dev/index \
 | `Not logged in` | Run `npx wrangler login` |
 | Vectorize index exists | Skip Step 2 or use a different name |
 | Plugin not loading | Check `openclaw plugins list` for errors |
+| Hermes provider not listed | Confirm `__init__.py` and `plugin.yaml` are under `$HERMES_HOME/plugins/openclaw-memory-vectorize/`, then restart the Hermes dashboard/gateway |
+| Hermes provider unavailable | Set `OPENCLAW_MEMORY_WORKER_URL` in the same environment that starts the Hermes gateway |
 | Query returns 0 results | Index some memories first (Step 8) |
 
 ---
@@ -231,6 +261,16 @@ curl -X POST https://your-worker.workers.dev/query \
 | `autoCapture` | `true` | Store important info after agent runs |
 | `minRecallScore` | `0.5` | Minimum similarity for recall (0-1) |
 | `recallLimit` | `3` | Max memories to inject |
+
+### Hermes Environment
+
+| Env var | Required | Description |
+|---------|----------|-------------|
+| `OPENCLAW_MEMORY_WORKER_URL` | yes | Deployed worker base URL |
+| `OPENCLAW_MEMORY_WORKER_TOKEN` | no | Optional bearer token |
+| `OPENCLAW_MEMORY_AGENT_ID` | no | Agent scope, such as `cleo` or `lilbeaver` |
+| `OPENCLAW_MEMORY_RECALL_LIMIT` | no | Default recall count, max 20 |
+| `OPENCLAW_MEMORY_MIN_SCORE` | no | Default search similarity threshold |
 
 ---
 

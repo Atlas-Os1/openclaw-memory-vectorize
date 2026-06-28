@@ -22,18 +22,23 @@ cd worker && npx wrangler deploy && cd ..
 mkdir -p ~/.openclaw/extensions/memory-vectorize
 cp plugin/index.ts ~/.openclaw/extensions/memory-vectorize/
 cp plugin/openclaw.plugin.json ~/.openclaw/extensions/memory-vectorize/
+
+# 5. Install memory provider (for Hermes users)
+mkdir -p "$HERMES_HOME/plugins/openclaw-memory-vectorize"
+cp __init__.py plugin.yaml "$HERMES_HOME/plugins/openclaw-memory-vectorize/"
 ```
 
 ---
 
 ## Project Overview
 
-OpenClaw plugin for persistent agent memory using Cloudflare Vectorize + Workers AI.
+OpenClaw and Hermes plugin for persistent agent memory using Cloudflare Vectorize + Workers AI.
 
 **What it does:**
 - Stores memories as vector embeddings
 - Auto-recalls relevant context before agent responses
 - Auto-captures decisions, corrections, preferences after responses
+- Registers as the `openclaw-memory-vectorize` Hermes memory provider
 
 ---
 
@@ -65,6 +70,8 @@ OpenClaw plugin for persistent agent memory using Cloudflare Vectorize + Workers
 | Modify auto-capture patterns | `plugin/index.ts` | `MEMORY_TRIGGERS` array |
 | Change recall behavior | `plugin/index.ts` | `before_agent_start` hook |
 | Add plugin config option | `plugin/openclaw.plugin.json` | `configSchema.properties` |
+| Change Hermes provider behavior | `__init__.py` | `OpenClawMemoryVectorizeProvider` |
+| Change Hermes provider metadata | `plugin.yaml` | Manifest fields |
 
 ---
 
