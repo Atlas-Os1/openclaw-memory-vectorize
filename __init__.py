@@ -75,7 +75,12 @@ class _OpenClawWorkerClient:
         self.token = token.strip()
 
     def _headers(self) -> Dict[str, str]:
-        headers = {"Content-Type": "application/json"}
+        headers = {
+            "Content-Type": "application/json",
+            # Cloudflare bot heuristics can reject Python's default requests UA (1010).
+            # Use an explicit integration UA so Hermes profile memory calls match curl/browser-like clients.
+            "User-Agent": "Hermes-OpenClaw-MemoryProvider/1.0",
+        }
         if self.token:
             headers["Authorization"] = f"Bearer {self.token.replace('Bearer ', '')}"
         return headers
