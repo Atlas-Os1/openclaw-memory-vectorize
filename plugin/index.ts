@@ -15,6 +15,7 @@ import type { OpenClawPluginApi } from "openclaw/plugin-sdk";
 
 interface PluginConfig {
   workerUrl: string;
+  workerToken?: string;
   autoRecall: boolean;
   autoCapture: boolean;
   minRecallScore: number;
@@ -53,7 +54,20 @@ type MemoryType = "decision" | "correction" | "learning" | "preference" | "conte
 // ============================================================================
 
 class VectorizeClient {
-  constructor(private workerUrl: string) {}
+  constructor(private workerUrl: string, private workerToken = "") {}
+
+  private headers(): Record<string, string> {
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+    };
+
+    const token = this.workerToken.trim().replace(/^Bearer\s+/i, "");
+    if (token) {
+      headers.Authorization = `Bearer ${token}`;
+    }
+
+    return headers;
+  }
 
   async query(
     queryText: string,
@@ -61,7 +75,7 @@ class VectorizeClient {
   ): Promise<QueryResponse> {
     const response = await fetch(`${this.workerUrl}/query`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: this.headers(),
       body: JSON.stringify({
         query: queryText,
         agent: options.agent,
@@ -86,7 +100,7 @@ class VectorizeClient {
   ): Promise<{ indexed: number; ids: string[] }> {
     const response = await fetch(`${this.workerUrl}/index`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: this.headers(),
       body: JSON.stringify({ agent, text, type, source_file: sourceFile }),
     });
 
@@ -104,7 +118,7 @@ class VectorizeClient {
   ): Promise<CaptureResponse> {
     const response = await fetch(`${this.workerUrl}/capture`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: this.headers(),
       body: JSON.stringify({
         agent,
         turn_type: "assistant",
@@ -173,7 +187,15 @@ const memoryVectorizePlugin = {
       api.logger.error("memory-vectorize: workerUrl is required in config");
       return;
     }
-    const client = new VectorizeClient(workerUrl);
+    const env = (globalThis as unknown as { process?: { env?: Record<string, string | undefined> } }).process?.env || {};
+    const workerToken = cfg.workerToken || env.OPENCLAW_MEMORY_WORKER_TOKEN || env.MEMORY_WORKER_TOKEN || "";
+    const client = new VectorizeClient(workerUrl, workerToken);
+
+    if (!workerToken) {
+      api.logger.warn?.(
+        "memory-vectorize: workerToken is not configured; recall/capture/store calls will fail when the worker requires bearer auth"
+      );
+    }
 
     // Get current agent ID from context
     const getAgentId = (): string => {

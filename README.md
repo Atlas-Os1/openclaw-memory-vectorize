@@ -257,6 +257,7 @@ curl -X POST https://your-worker.workers.dev/query \
 | Option | Default | Description |
 |--------|---------|-------------|
 | `workerUrl` | required | Your deployed worker URL |
+| `workerToken` | `""` | Bearer token for protected `/query`, `/index`, and `/capture` endpoints. Also read from `OPENCLAW_MEMORY_WORKER_TOKEN` or `MEMORY_WORKER_TOKEN` when available. |
 | `autoRecall` | `true` | Inject memories before agent runs |
 | `autoCapture` | `true` | Store important info after agent runs |
 | `minRecallScore` | `0.5` | Minimum similarity for recall (0-1) |
