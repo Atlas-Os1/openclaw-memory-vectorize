@@ -52,9 +52,8 @@ OpenClaw and Hermes plugin for persistent agent memory using Cloudflare Vectoriz
 ├── plugin/                    # OpenClaw integration
 │   ├── index.ts              # ← MAIN FILE: Lifecycle hooks
 │   └── openclaw.plugin.json  # Plugin manifest
-├── scripts/                   # CLI utilities
-│   ├── memory-vector-search.sh
-│   └── memory-vector-index.sh
+├── scripts/                   # CLI
+│   └── memory_cli.py          # search / index / index-all / health / stats
 ├── README.md                  # User documentation
 └── AGENTS.md                  # This file
 ```
