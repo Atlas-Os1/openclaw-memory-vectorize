@@ -274,26 +274,37 @@ curl -X POST https://your-worker.workers.dev/query \
 
 ---
 
-## CLI Scripts
+## CLI
 
-### Search Memories
+`scripts/memory_cli.py` replaces the old shell scripts with real subcommands,
+JSON output mode, and exit codes suitable for cron/scripting. Requires
+`MEMORY_WORKER_URL` (and `OPENCLAW_MEMORY_WORKER_TOKEN` for search/index,
+since those hit protected endpoints).
 
-```bash
-./scripts/memory-vector-search.sh "query" [agent] [topK]
-
-# Examples
-./scripts/memory-vector-search.sh "deployment decisions"
-./scripts/memory-vector-search.sh "API changes" dev 5
-```
-
-### Index Memories
+Known agents: `cleo`, `atlas`, `dev`, `lance`, `bigfoot`, `lil-beaver`.
+`pr-checker` is recognized as a name (local-only profile, not yet wired into
+the memory plugin) but is excluded from `index-all` and refused by `index`
+with an explanation, rather than silently doing nothing.
 
 ```bash
-./scripts/memory-vector-index.sh [agent|all]
+export MEMORY_WORKER_URL="https://your-worker.workers.dev"
+export OPENCLAW_MEMORY_WORKER_TOKEN="..."   # only needed for search/index
 
-# Examples
-./scripts/memory-vector-index.sh dev
-./scripts/memory-vector-index.sh all
+# Search
+./scripts/memory_cli.py search "deployment decisions" --agent dev --top-k 5
+
+# Reindex one agent (MEMORY.md + last 7 days of dated memory files)
+./scripts/memory_cli.py index dev
+
+# Reindex every known agent
+./scripts/memory_cli.py index-all
+
+# Health / stats
+./scripts/memory_cli.py health
+./scripts/memory_cli.py stats
+
+# Machine-readable output for scripting
+./scripts/memory_cli.py stats --json
 ```
 
 ---
