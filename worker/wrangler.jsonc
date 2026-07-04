@@ -4,6 +4,12 @@
   "main": "src/index.ts",
   "compatibility_date": "2025-01-01",
   "compatibility_flags": ["nodejs_compat"],
+
+  // Observability: enables Workers Logs for this Worker in production
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 1
+  },
   
   // Vectorize binding for semantic search
   "vectorize": [
