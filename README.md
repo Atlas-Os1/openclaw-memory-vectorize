@@ -256,8 +256,8 @@ curl -X POST https://your-worker.workers.dev/query \
 
 | Option | Default | Description |
 |--------|---------|-------------|
-| `workerUrl` | required | Your deployed worker URL |
-| `workerToken` | `""` | Bearer token for protected `/query`, `/index`, and `/capture` endpoints. Also read from `OPENCLAW_MEMORY_WORKER_TOKEN` or `MEMORY_WORKER_TOKEN` when available. |
+| `workerUrl` | `OPENCLAW_MEMORY_WORKER_URL` | Your deployed worker URL. Prefer the env var for shared Hermes/OpenClaw profile wiring. |
+| `workerToken` | `OPENCLAW_MEMORY_WORKER_TOKEN` | Bearer token for protected `/query`, `/index`, and `/capture` endpoints. `MEMORY_WORKER_TOKEN` is accepted only as a deprecated compatibility fallback. |
 | `autoRecall` | `true` | Inject memories before agent runs |
 | `autoCapture` | `true` | Store important info after agent runs |
 | `minRecallScore` | `0.5` | Minimum similarity for recall (0-1) |
@@ -278,9 +278,18 @@ curl -X POST https://your-worker.workers.dev/query \
 ## CLI
 
 `scripts/memory_cli.py` replaces the old shell scripts with real subcommands,
-JSON output mode, and exit codes suitable for cron/scripting. Requires
-`MEMORY_WORKER_URL` (and `OPENCLAW_MEMORY_WORKER_TOKEN` for search/index,
-since those hit protected endpoints).
+JSON output mode, and exit codes suitable for cron/scripting. It uses the same
+canonical env contract as the Hermes provider and OpenClaw plugin:
+
+- `OPENCLAW_MEMORY_WORKER_URL` — required worker base URL
+- `OPENCLAW_MEMORY_WORKER_TOKEN` — token for protected search/index endpoints
+- `OPENCLAW_MEMORY_AGENT_ID` — default agent scope for profile wiring
+- `OPENCLAW_MEMORY_RECALL_LIMIT` — default recall count
+- `OPENCLAW_MEMORY_MIN_SCORE` — default similarity threshold
+
+Deprecated compatibility fallbacks `MEMORY_WORKER_URL` and
+`MEMORY_WORKER_TOKEN` are accepted by the CLI/token path for old scripts, but new
+profile setup should not use them.
 
 Known agents: `cleo`, `atlas`, `dev`, `lance`, `bigfoot`, `lil-beaver`.
 `pr-checker` is recognized as a name (local-only profile, not yet wired into
@@ -288,7 +297,7 @@ the memory plugin) but is excluded from `index-all` and refused by `index`
 with an explanation, rather than silently doing nothing.
 
 ```bash
-export MEMORY_WORKER_URL="https://your-worker.workers.dev"
+export OPENCLAW_MEMORY_WORKER_URL="https://your-worker.workers.dev"
 export OPENCLAW_MEMORY_WORKER_TOKEN="..."   # only needed for search/index
 
 # Search

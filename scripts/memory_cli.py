@@ -13,15 +13,18 @@ Usage:
     memory_cli.py health [--json]
     memory_cli.py stats [--json]
 
-Configuration (env vars, same names the old scripts used where they existed):
-    MEMORY_WORKER_URL           Base URL of the deployed worker (required).
-    OPENCLAW_MEMORY_WORKER_TOKEN  Optional bearer token for write endpoints
-                                  (/index, /index-file, /capture). Falls back
-                                  to MEMORY_WORKER_TOKEN for compatibility.
+Configuration (canonical env vars):
+    OPENCLAW_MEMORY_WORKER_URL    Base URL of the deployed worker (required).
+    OPENCLAW_MEMORY_WORKER_TOKEN  Optional bearer token for protected endpoints.
+
+Legacy compatibility:
+    MEMORY_WORKER_URL and MEMORY_WORKER_TOKEN are still accepted as deprecated
+    fallbacks so existing cron/scripts do not break immediately. New setup docs
+    and profile wiring should use only the OPENCLAW_MEMORY_* names.
 
 Exit codes:
     0  success (including "no results found" for search)
-    1  usage error (bad args, missing MEMORY_WORKER_URL)
+    1  usage error (bad args, missing OPENCLAW_MEMORY_WORKER_URL)
     2  request to the worker failed (network error, non-2xx, bad JSON)
 """
 from __future__ import annotations
@@ -73,9 +76,12 @@ DEFAULT_DAYS = 7
 
 
 def _worker_url() -> str:
-    url = os.environ.get("MEMORY_WORKER_URL", "").strip()
+    url = (
+        os.environ.get("OPENCLAW_MEMORY_WORKER_URL", "").strip()
+        or os.environ.get("MEMORY_WORKER_URL", "").strip()
+    )
     if not url:
-        print("MEMORY_WORKER_URL is not set.", file=sys.stderr)
+        print("OPENCLAW_MEMORY_WORKER_URL is not set.", file=sys.stderr)
         sys.exit(1)
     return url.rstrip("/")
 
