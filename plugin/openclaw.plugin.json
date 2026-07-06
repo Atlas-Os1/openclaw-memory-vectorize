@@ -12,12 +12,12 @@
       "workerUrl": {
         "type": "string",
         "default": "",
-        "description": "URL of the memory worker"
+        "description": "URL of the memory worker. Defaults to OPENCLAW_MEMORY_WORKER_URL when omitted."
       },
       "workerToken": {
         "type": "string",
         "default": "",
-        "description": "Bearer token for protected memory worker endpoints"
+        "description": "Bearer token for protected memory worker endpoints. Defaults to OPENCLAW_MEMORY_WORKER_TOKEN when omitted."
       },
       "autoRecall": {
         "type": "boolean",

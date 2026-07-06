@@ -14,7 +14,7 @@ import type { OpenClawPluginApi } from "openclaw/plugin-sdk";
 // ============================================================================
 
 interface PluginConfig {
-  workerUrl: string;
+  workerUrl?: string;
   workerToken?: string;
   autoRecall: boolean;
   autoCapture: boolean;
@@ -170,6 +170,18 @@ function detectCategory(text: string): MemoryType {
   return "context";
 }
 
+function intFromEnv(value: string | undefined, fallback: number, min: number, max: number): number {
+  const parsed = Number.parseInt(value || "", 10);
+  if (!Number.isFinite(parsed)) return fallback;
+  return Math.max(min, Math.min(max, parsed));
+}
+
+function floatFromEnv(value: string | undefined, fallback: number, min: number, max: number): number {
+  const parsed = Number.parseFloat(value || "");
+  if (!Number.isFinite(parsed)) return fallback;
+  return Math.max(min, Math.min(max, parsed));
+}
+
 // ============================================================================
 // Plugin Definition
 // ============================================================================
@@ -182,13 +194,16 @@ const memoryVectorizePlugin = {
 
   register(api: OpenClawPluginApi) {
     const cfg = (api.pluginConfig || {}) as Partial<PluginConfig>;
-    const workerUrl = cfg.workerUrl;
+    const env = (globalThis as unknown as { process?: { env?: Record<string, string | undefined> } }).process?.env || {};
+    const workerUrl = (cfg.workerUrl || env.OPENCLAW_MEMORY_WORKER_URL || "").replace(/\/+$/, "");
     if (!workerUrl) {
-      api.logger.error("memory-vectorize: workerUrl is required in config");
+      api.logger.error("memory-vectorize: workerUrl config or OPENCLAW_MEMORY_WORKER_URL env var is required");
       return;
     }
-    const env = (globalThis as unknown as { process?: { env?: Record<string, string | undefined> } }).process?.env || {};
     const workerToken = cfg.workerToken || env.OPENCLAW_MEMORY_WORKER_TOKEN || env.MEMORY_WORKER_TOKEN || "";
+    const defaultAgentId = env.OPENCLAW_MEMORY_AGENT_ID || env.HERMES_AGENT_ID || "hermes";
+    const recallLimit = cfg.recallLimit ?? intFromEnv(env.OPENCLAW_MEMORY_RECALL_LIMIT, 3, 1, 20);
+    const minRecallScore = cfg.minRecallScore ?? floatFromEnv(env.OPENCLAW_MEMORY_MIN_SCORE, 0.5, 0, 1);
     const client = new VectorizeClient(workerUrl, workerToken);
 
     if (!workerToken) {
@@ -199,7 +214,7 @@ const memoryVectorizePlugin = {
 
     // Get current agent ID from context
     const getAgentId = (): string => {
-      return (api as any).agentId ?? (api as any).context?.agentId ?? "flo";
+      return (api as any).agentId ?? (api as any).context?.agentId ?? defaultAgentId;
     };
 
     api.logger.info(`memory-vectorize: plugin registered (worker: ${workerUrl})`);
@@ -314,8 +329,8 @@ const memoryVectorizePlugin = {
           const agentId = getAgentId();
           const results = await client.query(event.prompt, {
             agent: agentId,
-            topK: cfg.recallLimit ?? 3,
-            minScore: cfg.minRecallScore ?? 0.5,
+            topK: recallLimit,
+            minScore: minRecallScore,
           });
 
           if (results.count === 0) {
