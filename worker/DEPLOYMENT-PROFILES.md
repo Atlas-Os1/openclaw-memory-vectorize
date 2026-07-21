@@ -24,7 +24,8 @@ All deployments require the profile-specific `GATEWAY_TOKEN` secret. Never commi
 Repository: `Atlas-Os1/openclaw-memory-vectorize`
 Implementation branch: `cleo/storage-plane-hardening`
 Base: `33c2f106fca9ff5131356b782d759e657d6faec9`
-Remediation head: recorded in the follow-up commit containing this evidence.
+Remediation implementation SHA: `e1e44dccbf7a4c6e9f4ab6c854a6ff1b4e01ed13`
+Documentation evidence commit follows the implementation commit and records the same deployed source tree.
 
 Commands completed successfully from `worker/`:
 
