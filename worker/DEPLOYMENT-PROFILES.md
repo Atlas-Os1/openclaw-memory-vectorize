@@ -43,11 +43,23 @@ npx wrangler deploy --config wrangler.megenie.jsonc
 - Config: `worker/wrangler.jsonc`
 - Worker: `openclaw-memory-worker`
 - URL: https://openclaw-memory-worker.srvcflo.workers.dev
-- Version: `d9bdc352-4e53-4668-858b-9eab9a14a6ea`
+- Version: `ca2e2c7e-2e87-419e-8c59-488b96e89fd9`
 - `R2_MEMORY`: `hermes-memory`
 - `R2_FILES`: `hermes-files`
 - Vectorize: `agent-memories`
 - Allowed agent identity: `cleo`
+
+### Trading archive plane
+
+- Implementation extension SHA: `e0cccf0a581db65abf4df696ee4b35e675e0e7c4`
+- `R2_TRADING_MEMORY`: `trading-memory`
+- `R2_TRADING_FILES`: `trading-files`
+- Archive endpoint: `POST /trading/archive` (Cleo-only, authenticated)
+- Long-term source indexing: `POST /index-file` with `source_bucket` set to `trading-memory` or `trading-files` and an exact `key`
+- Retention procedure: `C:\Users\Minte\Desktop\dev-code\Trading\scripts\offload_old_trading.py --days 7 --apply --delete`
+- Manifests and briefs archive to `trading-memory`; event artifacts archive to `trading-files`.
+- Local deletion occurs only after archive and indexing succeed. Non-UTF-8 files are retained locally.
+- Verified run: 189 text artifacts archived, indexed, and removed locally; two PNGs retained intentionally.
 
 ### Atlas-Lanes plane
 
