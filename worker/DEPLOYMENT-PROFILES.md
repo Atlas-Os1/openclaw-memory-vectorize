@@ -24,8 +24,8 @@ All deployments require the profile-specific `GATEWAY_TOKEN` secret. Never commi
 Repository: `Atlas-Os1/openclaw-memory-vectorize`
 Implementation branch: `cleo/storage-plane-hardening`
 Base: `33c2f106fca9ff5131356b782d759e657d6faec9`
-Remediation implementation SHA: `e1e44dccbf7a4c6e9f4ab6c854a6ff1b4e01ed13`
-Documentation evidence commit follows the implementation commit and records the same deployed source tree.
+Final implementation SHA: `58f1e3d723536585dd538a8da7a95de791a86bad`
+The deployment versions below were deployed from this implementation tree before the documentation-only evidence commit.
 
 Commands completed successfully from `worker/`:
 
@@ -43,33 +43,33 @@ npx wrangler deploy --config wrangler.megenie.jsonc
 - Config: `worker/wrangler.jsonc`
 - Worker: `openclaw-memory-worker`
 - URL: https://openclaw-memory-worker.srvcflo.workers.dev
-- Version: `b5c8622e-77df-4d8b-a12a-277aec075a1d`
+- Version: `d9bdc352-4e53-4668-858b-9eab9a14a6ea`
 - `R2_MEMORY`: `hermes-memory`
 - `R2_FILES`: `hermes-files`
 - Vectorize: `agent-memories`
-- Allowed agents: `cleo,atlas,dev,lance,bigfoot,lil-beaver`
+- Allowed agent identity: `cleo`
 
 ### Atlas-Lanes plane
 
 - Config: `worker/wrangler.atlas.jsonc`
 - Worker: `atlas-memory-worker`
 - URL: https://atlas-memory-worker.srvcflo.workers.dev
-- Version: `e7ed5bbd-db95-4fce-81f1-0c80e00fd9fd`
+- Version: `ca2fee94-b0e2-4d4f-9f22-d534cbb5e965`
 - `R2_MEMORY`: `atlas-lanes-memory`
 - `R2_FILES`: `atlas-lanes-files`
 - Vectorize: `agent-memories`
-- Allowed agents: `atlas,dev,lance,bigfoot,lil-beaver`
+- Allowed agent identity: `atlas`
 
 ### MEgenie plane
 
 - Config: `worker/wrangler.megenie.jsonc`
 - Worker: `megenie-memory-worker`
 - URL: https://megenie-memory-worker.srvcflo.workers.dev
-- Version: `e677df5c-0816-4293-8c25-97bb5d72ca4c`
+- Version: `e8ef71cf-f483-4979-b847-10452945ba98`
 - `R2_MEMORY`: `megenie-memory`
 - `R2_FILES`: `megenie-files`
 - Vectorize: `megenie-agent-memories`
-- Allowed agents: `megenie`
+- Allowed agent identity: `megenie`
 
 ### Runtime verification
 
