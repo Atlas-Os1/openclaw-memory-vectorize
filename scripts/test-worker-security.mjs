@@ -35,6 +35,13 @@ const env = {
   AI: { run: async () => ({ data: [[0.1, 0.2]] }) },
   VECTORIZE: { upsert: async () => ({ inserted: 1 }), query: async () => ({ matches: [] }) },
 };
+const tradingCalls = { filesPut: 0, memoryPut: 0 };
+const tradingEnv = {
+  ...env,
+  ALLOWED_AGENTS: 'cleo',
+  R2_TRADING_FILES: { put: async () => { tradingCalls.filesPut++; }, get: async () => fileObject },
+  R2_TRADING_MEMORY: { put: async () => { tradingCalls.memoryPut++; }, get: async () => fileObject },
+};
 const ctx = { waitUntil() {} };
 const request = (path, init = {}) => new Request(`https://test.local${path}`, init);
 const json = (path, body, auth = true) => request(path, {
@@ -60,6 +67,9 @@ assert.equal(calls.filesGet, 1);
 assert.equal(calls.memoryGet, 0);
 assert.equal((await workerHandler.fetch(json('/index-file', { agent: 'megenie', file: 'MEMORY.md', source_bucket: 'memory' }), env, ctx)).status, 200);
 assert.equal(calls.memoryGet, 1);
+assert.equal((await workerHandler.fetch(json('/trading/archive', { agent: 'cleo', bucket: 'files', key: 'trading/briefs/old.md', content: 'old brief' }), tradingEnv, ctx)).status, 201);
+assert.equal(tradingCalls.filesPut, 1);
+assert.equal((await workerHandler.fetch(json('/index-file', { agent: 'cleo', file: 'trading/briefs/old.md', source_bucket: 'trading-files' }), tradingEnv, ctx)).status, 200);
 const health = await workerHandler.fetch(request('/health'), env, ctx);
 const healthBody = await health.json();
 assert.equal(health.status, 200);

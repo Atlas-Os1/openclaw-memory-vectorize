@@ -12,6 +12,8 @@ export interface Env {
   AI: Ai;
   R2_MEMORY: R2Bucket;
   R2_FILES: R2Bucket;
+  R2_TRADING_MEMORY?: R2Bucket;
+  R2_TRADING_FILES?: R2Bucket;
   // Memory artifacts use R2_MEMORY; shared/file artifacts use R2_FILES.
   EMBEDDING_MODEL: string;
   GATEWAY_TOKEN?: string;
@@ -131,7 +133,13 @@ function generateId(agent: string, source: string, text: string): string {
 // Utility: Chunk text into indexable segments
 function chunkText(text: string, maxChunkSize = 500): string[] {
   const chunks: string[] = [];
-  const paragraphs = text.split(/\n\n+/);
+  const paragraphs = text.split(/\n\n+/).flatMap((para) => {
+    const parts: string[] = [];
+    for (let start = 0; start < para.length; start += maxChunkSize) {
+      parts.push(para.slice(start, start + maxChunkSize));
+    }
+    return parts;
+  });
 
   let currentChunk = '';
   for (const para of paragraphs) {
@@ -167,6 +175,36 @@ export default {
 
     try {
       const fileRoute = parseAgentFilePath(path);
+
+      // ================================
+      // POST /trading/archive - archive local Trading artifacts in R2
+      // ================================
+      if (path === '/trading/archive' && request.method === 'POST') {
+        const authError = requireAuth(request, env, corsHeaders);
+        if (authError) return authError;
+
+        const body = await request.json() as { agent?: string; bucket?: 'files' | 'memory'; key?: string; content?: string };
+        if (body.agent !== 'cleo') {
+          return jsonResponse({ error: 'Trading archive is restricted to the Cleo plane' }, { status: 403 }, corsHeaders);
+        }
+        if (body.bucket !== 'files' && body.bucket !== 'memory') {
+          return jsonResponse({ error: 'bucket must be files or memory' }, { status: 400 }, corsHeaders);
+        }
+        const keyError = validateFileKey(body.key);
+        if (keyError || body.key?.startsWith('trading/') !== true) {
+          return jsonResponse({ error: keyError || 'Trading archive keys must start with trading/' }, { status: 400 }, corsHeaders);
+        }
+        if (typeof body.content !== 'string') {
+          return jsonResponse({ error: 'content is required' }, { status: 400 }, corsHeaders);
+        }
+        const bucket = body.bucket === 'files' ? env.R2_TRADING_FILES : env.R2_TRADING_MEMORY;
+        if (!bucket) return jsonResponse({ error: 'Trading R2 binding is not configured' }, { status: 503 }, corsHeaders);
+        await bucket.put(body.key, body.content, {
+          httpMetadata: { contentType: 'application/octet-stream' },
+          customMetadata: { source: 'local-trading-offload', archived_at: new Date().toISOString(), agent: 'cleo' },
+        });
+        return jsonResponse({ archived: true, bucket: body.bucket, key: body.key }, { status: 201 }, corsHeaders);
+      }
 
       // ================================
       // GET/PUT /agents/:agent/files/* - R2 memory file mirror
@@ -394,21 +432,27 @@ export default {
         const authError = requireAuth(request, env, corsHeaders);
         if (authError) return authError;
 
-        const body = await request.json() as { agent: string; file: string; source_bucket?: 'files' | 'memory' };
+        const body = await request.json() as { agent: string; file?: string; key?: string; source_bucket?: 'files' | 'memory' | 'trading-files' | 'trading-memory' };
 
-        if (!body.agent || !body.file) {
+        const objectKey = body.key || body.file;
+        if (!body.agent || !objectKey) {
           return jsonResponse({ error: 'agent and file are required' }, { status: 400 }, corsHeaders);
         }
         const agentError = requireKnownAgent(body.agent, env, corsHeaders);
         if (agentError) return agentError;
-        const fileError = validateFileKey(body.file);
+        const fileError = validateFileKey(objectKey);
         if (fileError) return jsonResponse({ error: fileError }, { status: 400 }, corsHeaders);
 
         // Fetch file from R2
-        const sourceBucket = body.source_bucket === 'memory' ? env.R2_MEMORY : env.R2_FILES;
-        const obj = await sourceBucket.get(body.agent + '/' + body.file);
+        const sourceBucket = body.source_bucket === 'memory' ? env.R2_MEMORY
+          : body.source_bucket === 'trading-files' ? env.R2_TRADING_FILES
+          : body.source_bucket === 'trading-memory' ? env.R2_TRADING_MEMORY
+          : env.R2_FILES;
+        if (!sourceBucket) return jsonResponse({ error: 'Requested R2 source bucket is not configured' }, { status: 503 }, corsHeaders);
+        const resolvedKey = body.source_bucket?.startsWith('trading-') ? objectKey : `${body.agent}/${objectKey}`;
+        const obj = await sourceBucket.get(resolvedKey);
         if (!obj) {
-          return jsonResponse({ error: `File not found: ${body.file}` }, { status: 404 }, corsHeaders);
+          return jsonResponse({ error: `File not found: ${objectKey}` }, { status: 404 }, corsHeaders);
         }
 
         const text = await obj.text();
@@ -425,7 +469,7 @@ export default {
             { text: [chunk] }
           ) as unknown as EmbeddingResponse;
 
-          const id = generateId(body.agent, body.file, chunk);
+          const id = generateId(body.agent, objectKey.slice(-32), chunk);
 
           vectors.push({
             id,
@@ -433,7 +477,7 @@ export default {
             metadata: {
               agent: body.agent,
               type: 'context',
-              source_file: body.file,
+              source_file: objectKey,
               timestamp: new Date().toISOString(),
               chunk_index: i,
               raw_text: chunk,
@@ -450,7 +494,7 @@ export default {
         }
 
         return jsonResponse({
-          file: body.file,
+          file: objectKey,
           chunks: vectors.length,
           indexed: totalInserted,
         }, {}, corsHeaders);

@@ -28,7 +28,9 @@
   // Add your own buckets here
   "r2_buckets": [
     { "binding": "R2_MEMORY", "bucket_name": "hermes-memory" },
-    { "binding": "R2_FILES", "bucket_name": "hermes-files" }
+    { "binding": "R2_FILES", "bucket_name": "hermes-files" },
+    { "binding": "R2_TRADING_MEMORY", "bucket_name": "trading-memory" },
+    { "binding": "R2_TRADING_FILES", "bucket_name": "trading-files" }
   ],
   
   // Environment variables
