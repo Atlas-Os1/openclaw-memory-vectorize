@@ -77,6 +77,8 @@ npx wrangler deploy --config wrangler.megenie.jsonc
 - Cache-busted MEgenie health response identified `service: megenie-memory-worker`.
 - Unauthenticated `GET /agents/unknown/files/MEMORY.md` returned HTTP 401 for all three workers.
 - Worker security/storage test returned `worker security/storage checks passed`.
+- `npm audit --omit=dev --audit-level=high` returned `found 0 vulnerabilities`.
+- Full `npm audit` reports three high-severity transitive vulnerabilities through the Wrangler/Miniflare/Sharp development toolchain. They are not in the production Worker bundle; `npm audit fix --force` proposes a breaking Wrangler downgrade and is not applied without a compatibility review.
 - `source_bucket` defaults to `files` for `/index-file`; `source_bucket: "memory"` is an explicit compatibility path for legacy R2_MEMORY objects.
 - Unknown or unauthorized agents return HTTP 400 after authentication.
 
