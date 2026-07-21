@@ -10,12 +10,22 @@ export interface Env {
   AI: Ai;
   R2_MEMORY: R2Bucket;
   R2_FILES: R2Bucket;
-  // (third bucket removed; hermes uses R2_MEMORY + R2_FILES)
+  // Memory artifacts use R2_MEMORY; shared/file artifacts use R2_FILES.
   EMBEDDING_MODEL: string;
   GATEWAY_TOKEN?: string;
 }
 
 const PROTECTED_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
+const KNOWN_AGENTS = new Set([
+  'cleo', 'atlas', 'dev', 'locdev', 'auditor', 'curator', 'pr-checker',
+  'lance', 'bigfoot', 'lil-beaver', 'ansem', 'megenie',
+]);
+
+function requireKnownAgent(agent: string, corsHeaders: Record<string, string>): Response | null {
+  return KNOWN_AGENTS.has(agent)
+    ? null
+    : jsonResponse({ error: 'Unknown agent' }, { status: 400 }, corsHeaders);
+}
 
 interface EmbeddingResponse {
   shape: number[];
@@ -64,8 +74,8 @@ function jsonResponse(payload: unknown, init: ResponseInit = {}, corsHeaders: Re
   });
 }
 
-function requireAuth(request: Request, env: Env, corsHeaders: Record<string, string>): Response | null {
-  if (!PROTECTED_METHODS.has(request.method)) {
+function requireAuth(request: Request, env: Env, corsHeaders: Record<string, string>, force = false): Response | null {
+  if (!force && !PROTECTED_METHODS.has(request.method)) {
     return null;
   }
 
@@ -164,8 +174,13 @@ export default {
       // GET/PUT /agents/:agent/files/* - R2 memory file mirror
       // ================================
       if (fileRoute && request.method === 'GET') {
+        const authError = requireAuth(request, env, corsHeaders, true);
+        if (authError) return authError;
+        const agentError = requireKnownAgent(fileRoute.agent, corsHeaders);
+        if (agentError) return agentError;
+
         const objectKey = `${fileRoute.agent}/${fileRoute.file}`;
-        const obj = await env.R2_MEMORY.get(objectKey);
+        const obj = await env.R2_FILES.get(objectKey);
         if (!obj) {
           return jsonResponse({ error: `File not found: ${fileRoute.file}` }, { status: 404 }, corsHeaders);
         }
@@ -184,10 +199,12 @@ export default {
       if (fileRoute && request.method === 'PUT') {
         const authError = requireAuth(request, env, corsHeaders);
         if (authError) return authError;
+        const agentError = requireKnownAgent(fileRoute.agent, corsHeaders);
+        if (agentError) return agentError;
 
         const objectKey = `${fileRoute.agent}/${fileRoute.file}`;
         const contentType = request.headers.get('Content-Type') || contentTypeForPath(fileRoute.file);
-        await env.R2_MEMORY.put(objectKey, request.body, {
+        await env.R2_FILES.put(objectKey, request.body, {
           httpMetadata: { contentType },
           customMetadata: {
             agent: fileRoute.agent,
@@ -378,18 +395,11 @@ export default {
         if (!body.agent || !body.file) {
           return jsonResponse({ error: 'agent and file are required' }, { status: 400 }, corsHeaders);
         }
-
-        // Get R2 bucket based on agent
-        let bucket: R2Bucket;
-        switch (body.agent) {
-          case 'cleo': bucket = env.R2_MEMORY; break;
-          case 'lilbeaver': bucket = env.R2_MEMORY; break;
-          default:
-            bucket = env.R2_MEMORY; break; // any hermes agent shares the memory bucket
-        }
+        const agentError = requireKnownAgent(body.agent, corsHeaders);
+        if (agentError) return agentError;
 
         // Fetch file from R2
-        const obj = await bucket.get(body.agent + '/' + body.file);
+        const obj = await env.R2_MEMORY.get(body.agent + '/' + body.file);
         if (!obj) {
           return jsonResponse({ error: `File not found: ${body.file}` }, { status: 404 }, corsHeaders);
         }
