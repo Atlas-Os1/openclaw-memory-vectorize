@@ -1,4 +1,6 @@
-﻿/**
+﻿import { validateAgent } from './policy';
+
+/**
  * Atlas Memory Worker
  *
  * Semantic memory layer for agents using Cloudflare Vectorize + Workers AI.
@@ -13,18 +15,14 @@ export interface Env {
   // Memory artifacts use R2_MEMORY; shared/file artifacts use R2_FILES.
   EMBEDDING_MODEL: string;
   GATEWAY_TOKEN?: string;
+  ALLOWED_AGENTS?: string;
+  WORKER_SERVICE_NAME?: string;
 }
 
 const PROTECTED_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
-const KNOWN_AGENTS = new Set([
-  'cleo', 'atlas', 'dev', 'locdev', 'auditor', 'curator', 'pr-checker',
-  'lance', 'bigfoot', 'lil-beaver', 'ansem', 'megenie',
-]);
-
-function requireKnownAgent(agent: string, corsHeaders: Record<string, string>): Response | null {
-  return KNOWN_AGENTS.has(agent)
-    ? null
-    : jsonResponse({ error: 'Unknown agent' }, { status: 400 }, corsHeaders);
+function requireKnownAgent(agent: string | undefined, env: Env, corsHeaders: Record<string, string>): Response | null {
+  const error = validateAgent(agent, env.ALLOWED_AGENTS);
+  return error ? jsonResponse({ error }, { status: 400 }, corsHeaders) : null;
 }
 
 interface EmbeddingResponse {
@@ -176,7 +174,7 @@ export default {
       if (fileRoute && request.method === 'GET') {
         const authError = requireAuth(request, env, corsHeaders, true);
         if (authError) return authError;
-        const agentError = requireKnownAgent(fileRoute.agent, corsHeaders);
+        const agentError = requireKnownAgent(fileRoute.agent, env, corsHeaders);
         if (agentError) return agentError;
 
         const objectKey = `${fileRoute.agent}/${fileRoute.file}`;
@@ -199,7 +197,7 @@ export default {
       if (fileRoute && request.method === 'PUT') {
         const authError = requireAuth(request, env, corsHeaders);
         if (authError) return authError;
-        const agentError = requireKnownAgent(fileRoute.agent, corsHeaders);
+        const agentError = requireKnownAgent(fileRoute.agent, env, corsHeaders);
         if (agentError) return agentError;
 
         const objectKey = `${fileRoute.agent}/${fileRoute.file}`;
@@ -230,9 +228,11 @@ export default {
 
         const body: QueryRequest = await request.json();
 
-        if (!body.query) {
-          return jsonResponse({ error: 'query is required' }, { status: 400 }, corsHeaders);
+        if (!body.query || !body.agent) {
+          return jsonResponse({ error: 'query and agent are required' }, { status: 400 }, corsHeaders);
         }
+        const agentError = requireKnownAgent(body.agent, env, corsHeaders);
+        if (agentError) return agentError;
 
         // Generate embedding for query
         const embeddingResp = await env.AI.run(
@@ -279,6 +279,8 @@ export default {
         if (!body.agent || !body.text) {
           return jsonResponse({ error: 'agent and text are required' }, { status: 400 }, corsHeaders);
         }
+        const agentError = requireKnownAgent(body.agent, env, corsHeaders);
+        if (agentError) return agentError;
 
         // Chunk the text
         const chunks = chunkText(body.text);
@@ -331,6 +333,8 @@ export default {
         if (!body.agent || !body.content) {
           return jsonResponse({ error: 'agent and content are required' }, { status: 400 }, corsHeaders);
         }
+        const agentError = requireKnownAgent(body.agent, env, corsHeaders);
+        if (agentError) return agentError;
 
         // If not pre-classified, use simple heuristics
         let memoryType: MemoryMetadata['type'] = 'context';
@@ -390,16 +394,17 @@ export default {
         const authError = requireAuth(request, env, corsHeaders);
         if (authError) return authError;
 
-        const body = await request.json() as { agent: string; file: string };
+        const body = await request.json() as { agent: string; file: string; source_bucket?: 'files' | 'memory' };
 
         if (!body.agent || !body.file) {
           return jsonResponse({ error: 'agent and file are required' }, { status: 400 }, corsHeaders);
         }
-        const agentError = requireKnownAgent(body.agent, corsHeaders);
+        const agentError = requireKnownAgent(body.agent, env, corsHeaders);
         if (agentError) return agentError;
 
         // Fetch file from R2
-        const obj = await env.R2_MEMORY.get(body.agent + '/' + body.file);
+        const sourceBucket = body.source_bucket === 'memory' ? env.R2_MEMORY : env.R2_FILES;
+        const obj = await sourceBucket.get(body.agent + '/' + body.file);
         if (!obj) {
           return jsonResponse({ error: `File not found: ${body.file}` }, { status: 404 }, corsHeaders);
         }
@@ -476,7 +481,7 @@ export default {
       if (path === '/health' || path === '/') {
         return jsonResponse({
           status: 'ok',
-          service: 'openclaw-memory-worker',
+          service: env.WORKER_SERVICE_NAME || 'openclaw-memory-worker',
           timestamp: new Date().toISOString(),
         }, {}, corsHeaders);
       }

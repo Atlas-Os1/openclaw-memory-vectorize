@@ -11,5 +11,9 @@
     { "binding": "R2_MEMORY", "bucket_name": "megenie-memory" },
     { "binding": "R2_FILES", "bucket_name": "megenie-files" }
   ],
-  "vars": { "EMBEDDING_MODEL": "@cf/baai/bge-base-en-v1.5" }
+  "vars": {
+    "EMBEDDING_MODEL": "@cf/baai/bge-base-en-v1.5",
+    "ALLOWED_AGENTS": "megenie",
+    "WORKER_SERVICE_NAME": "megenie-memory-worker"
+  }
 }
