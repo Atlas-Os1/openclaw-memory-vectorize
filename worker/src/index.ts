@@ -1,4 +1,4 @@
-﻿import { validateAgent } from './policy';
+﻿import { validateAgent, validateFileKey } from './policy';
 
 /**
  * Atlas Memory Worker
@@ -401,6 +401,8 @@ export default {
         }
         const agentError = requireKnownAgent(body.agent, env, corsHeaders);
         if (agentError) return agentError;
+        const fileError = validateFileKey(body.file);
+        if (fileError) return jsonResponse({ error: fileError }, { status: 400 }, corsHeaders);
 
         // Fetch file from R2
         const sourceBucket = body.source_bucket === 'memory' ? env.R2_MEMORY : env.R2_FILES;

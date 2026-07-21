@@ -13,7 +13,7 @@
   ],
   "vars": {
     "EMBEDDING_MODEL": "@cf/baai/bge-base-en-v1.5",
-    "ALLOWED_AGENTS": "atlas,dev,lance,bigfoot,lil-beaver",
+    "ALLOWED_AGENTS": "atlas",
     "WORKER_SERVICE_NAME": "atlas-memory-worker"
   }
 }

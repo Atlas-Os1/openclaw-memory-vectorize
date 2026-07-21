@@ -49,6 +49,8 @@ assert.equal((await workerHandler.fetch(json('/query', { query: 'hello', agent: 
 assert.equal((await workerHandler.fetch(json('/index', { agent: 'cleo', text: 'hello' }), env, ctx)).status, 400);
 assert.equal((await workerHandler.fetch(json('/capture', { agent: 'cleo', content: 'remember this decision' }), env, ctx)).status, 400);
 assert.equal((await workerHandler.fetch(json('/index-file', { agent: 'cleo', file: 'MEMORY.md' }), env, ctx)).status, 400);
+assert.equal((await workerHandler.fetch(json('/index-file', { agent: 'megenie', file: '../secret' }), env, ctx)).status, 400);
+assert.equal((await workerHandler.fetch(json('/index', { agent: 'megenie', text: 'hello' }), { ...env, ALLOWED_AGENTS: '' }, ctx)).status, 400);
 assert.equal((await workerHandler.fetch(request('/agents/megenie/files/../secret', { method: 'GET', headers: { Authorization: 'Bearer token' } }), env, ctx)).status, 404);
 assert.equal((await workerHandler.fetch(request('/agents/megenie/files/MEMORY.md', { method: 'PUT', headers: { Authorization: 'Bearer token' }, body: 'data' }), env, ctx)).status, 201);
 assert.equal(calls.filesPut, 1);

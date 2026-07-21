@@ -34,7 +34,7 @@
   // Environment variables
   "vars": {
     "EMBEDDING_MODEL": "@cf/baai/bge-base-en-v1.5",
-    "ALLOWED_AGENTS": "cleo,atlas,dev,lance,bigfoot,lil-beaver",
+    "ALLOWED_AGENTS": "cleo",
     "WORKER_SERVICE_NAME": "openclaw-memory-worker"
   }
 }
