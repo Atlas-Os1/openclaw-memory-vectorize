@@ -43,6 +43,8 @@ const tradingEnv = {
   R2_TRADING_FILES: { put: async () => { tradingCalls.filesPut++; }, get: async () => fileObject },
   R2_TRADING_MEMORY: { put: async () => { tradingCalls.memoryPut++; }, get: async () => fileObject },
 };
+const cleoEnv = { ...env, ALLOWED_AGENTS: 'cleo', TRADING_ARCHIVE_AGENT: undefined };
+const mismatchedTradingEnv = { ...tradingEnv, TRADING_ARCHIVE_AGENT: 'atlas' };
 const ctx = { waitUntil() {} };
 const request = (path, init = {}) => new Request(`https://test.local${path}`, init);
 const json = (path, body, auth = true) => request(path, {
@@ -71,6 +73,9 @@ assert.equal(calls.memoryGet, 1);
 assert.equal((await workerHandler.fetch(json('/trading/archive', { agent: 'cleo', bucket: 'files', key: 'trading/briefs/old.md', content: 'old brief' }), tradingEnv, ctx)).status, 201);
 assert.equal(tradingCalls.filesPut, 1);
 assert.equal((await workerHandler.fetch(json('/index-file', { agent: 'cleo', file: 'trading/briefs/old.md', source_bucket: 'trading-files' }), tradingEnv, ctx)).status, 200);
+assert.equal((await workerHandler.fetch(json('/trading/archive', { agent: 'cleo', bucket: 'files', key: 'trading/no-access.txt', content: 'blocked' }), cleoEnv, ctx)).status, 503);
+assert.equal((await workerHandler.fetch(json('/index-file', { agent: 'cleo', key: 'trading/briefs/old.md', source_bucket: 'trading-files' }), cleoEnv, ctx)).status, 503);
+assert.equal((await workerHandler.fetch(json('/trading/archive', { agent: 'cleo', bucket: 'files', key: 'trading/no-access.txt', content: 'blocked' }), mismatchedTradingEnv, ctx)).status, 403);
 const health = await workerHandler.fetch(request('/health'), env, ctx);
 const healthBody = await health.json();
 assert.equal(health.status, 200);

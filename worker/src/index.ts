@@ -186,6 +186,8 @@ export default {
 
         const body = await request.json() as { agent?: string; bucket?: 'files' | 'memory'; key?: string; content?: string };
         const archiveAgent = env.TRADING_ARCHIVE_AGENT || env.ALLOWED_AGENTS;
+        const agentError = requireKnownAgent(body.agent, env, corsHeaders);
+        if (agentError) return agentError;
         if (!archiveAgent || body.agent !== archiveAgent) {
           return jsonResponse({ error: 'Trading archive is restricted to its configured agent plane' }, { status: 403 }, corsHeaders);
         }
