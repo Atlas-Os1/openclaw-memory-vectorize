@@ -178,27 +178,32 @@ def cmd_search(args: argparse.Namespace) -> int:
 
 def _index_file(agent: str, file: str) -> tuple[bool, int, str]:
     result = _request("POST", "/index-file", {"agent": agent, "file": file})
-    if result["status"] >= 400:
-        return False, 0, result["body"].get("error", str(result["body"]))
-    return True, result["body"].get("chunks", 0), ""
+    body = result["body"]
+    if result["status"] >= 400 or body.get("failed", 0) > 0:
+        detail = body.get("error", str(body))
+        if body.get("run_id"):
+            detail = f"run {body['run_id']}: {detail}"
+        return False, body.get("succeeded", body.get("chunks", 0)), detail
+    return True, body.get("succeeded", body.get("chunks", 0)), ""
 
 
 def _index_one_agent(agent: str, days: int) -> dict:
-    report = {"agent": agent, "files": []}
+    report = {"agent": agent, "files": [], "failed": False}
 
     ok, chunks, err = _index_file(agent, "MEMORY.md")
     report["files"].append({"file": "MEMORY.md", "ok": ok, "chunks": chunks, "error": err})
+    report["failed"] = not ok
 
     today = datetime.date.today()
     for i in range(days):
         date_str = (today - datetime.timedelta(days=i)).isoformat()
         file = f"memory/{date_str}.md"
         ok, chunks, err = _index_file(agent, file)
-        # Daily files are expected to be missing most days -- only record
-        # ones that actually indexed something, same spirit as the old
-        # script but without spamming "not found" for every miss.
-        if ok and chunks:
-            report["files"].append({"file": file, "ok": True, "chunks": chunks, "error": ""})
+        # Missing daily files are expected; retain other failures in the report.
+        if not ok and "File not found" in err:
+            continue
+        report["files"].append({"file": file, "ok": ok, "chunks": chunks, "error": err})
+        report["failed"] = report["failed"] or not ok
 
     return report
 
@@ -222,14 +227,14 @@ def cmd_index(args: argparse.Namespace) -> int:
         for f in report["files"]:
             marker = "ok" if f["ok"] else f"FAILED ({f['error']})"
             print(f"  {f['file']}: {f['chunks']} chunks  [{marker}]")
-    return 0
+    return 2 if report["failed"] else 0
 
 
 def cmd_index_all(args: argparse.Namespace) -> int:
     reports = [_index_one_agent(agent, args.days) for agent in KNOWN_AGENTS]
     if args.json:
         print(json.dumps(reports))
-        return 0
+        return 2 if any(report["failed"] for report in reports) else 0
 
     for report in reports:
         print(f"Indexing {report['agent']}:")
@@ -237,7 +242,7 @@ def cmd_index_all(args: argparse.Namespace) -> int:
             marker = "ok" if f["ok"] else f"FAILED ({f['error']})"
             print(f"  {f['file']}: {f['chunks']} chunks  [{marker}]")
     print("Done.")
-    return 0
+    return 2 if any(report["failed"] for report in reports) else 0
 
 
 def build_parser() -> argparse.ArgumentParser:

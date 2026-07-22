@@ -54,6 +54,56 @@ interface CaptureRequest {
   classification?: string;  // Pre-classified by gateway
 }
 
+type IndexChunkStatus = 'succeeded' | 'failed';
+
+interface IndexRunChunk {
+  index: number;
+  id: string;
+  status: IndexChunkStatus;
+  retryable: boolean;
+  error?: string;
+}
+
+interface IndexRunRecord {
+  run_id: string;
+  agent: string;
+  file: string;
+  status: 'running' | 'completed' | 'partial' | 'failed';
+  total: number;
+  succeeded: number;
+  failed: number;
+  retryable: number;
+  attempts: number;
+  updated_at: string;
+  chunks: IndexRunChunk[];
+}
+
+function runObjectKey(runId: string): string {
+  return `index-runs/${runId}.json`;
+}
+
+async function runIdFor(agent: string, file: string, text: string): Promise<string> {
+  const input = new TextEncoder().encode(`${agent}\\n${file}\\n${text}`);
+  const digest = await crypto.subtle.digest('SHA-256', input);
+  return Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('').slice(0, 32);
+}
+
+async function readIndexRun(bucket: R2Bucket, runId: string): Promise<IndexRunRecord | null> {
+  const object = await bucket.get(runObjectKey(runId));
+  return object ? await object.json() as IndexRunRecord : null;
+}
+
+async function writeIndexRun(bucket: R2Bucket, run: IndexRunRecord): Promise<void> {
+  await bucket.put(runObjectKey(run.run_id), JSON.stringify(run), {
+    httpMetadata: { contentType: 'application/json; charset=utf-8' },
+  });
+}
+
+function indexRunStatus(succeeded: number, failed: number): IndexRunRecord['status'] {
+  if (failed === 0) return 'completed';
+  return succeeded === 0 ? 'failed' : 'partial';
+}
+
 function jsonResponse(payload: unknown, init: ResponseInit = {}, corsHeaders: Record<string, string>): Response {
   return Response.json(payload, {
     ...init,
@@ -379,64 +429,104 @@ export default {
           return jsonResponse({ error: 'agent and file are required' }, { status: 400 }, corsHeaders);
         }
 
-        // Get R2 bucket based on agent
-        let bucket: R2Bucket;
-        switch (body.agent) {
-          case 'cleo': bucket = env.R2_MEMORY; break;
-          case 'lilbeaver': bucket = env.R2_MEMORY; break;
-          default:
-            bucket = env.R2_MEMORY; break; // any hermes agent shares the memory bucket
-        }
-
-        // Fetch file from R2
-        const obj = await bucket.get(body.agent + '/' + body.file);
+        const bucket = env.R2_MEMORY;
+        const obj = await bucket.get(`${body.agent}/${body.file}`);
         if (!obj) {
           return jsonResponse({ error: `File not found: ${body.file}` }, { status: 404 }, corsHeaders);
         }
 
         const text = await obj.text();
 
-        // Index the content
         const chunks = chunkText(text);
-        const vectors: VectorizeVector[] = [];
+        const runId = await runIdFor(body.agent, body.file, text);
+        const previous = await readIndexRun(bucket, runId);
+        const run: IndexRunRecord = previous || {
+          run_id: runId,
+          agent: body.agent,
+          file: body.file,
+          status: 'running',
+          total: chunks.length,
+          succeeded: 0,
+          failed: chunks.length,
+          retryable: chunks.length,
+          attempts: 0,
+          updated_at: new Date().toISOString(),
+          chunks: chunks.map((chunk, index) => ({
+            index,
+            id: generateId(body.agent, body.file, chunk),
+            status: 'failed',
+            retryable: true,
+          })),
+        };
+        run.total = chunks.length;
+        run.attempts += 1;
+        run.updated_at = new Date().toISOString();
+        await writeIndexRun(bucket, run);
 
-        for (let i = 0; i < chunks.length; i++) {
-          const chunk = chunks[i];
-
-          const embeddingResp = await env.AI.run(
-            env.EMBEDDING_MODEL as any,
-            { text: [chunk] }
-          ) as unknown as EmbeddingResponse;
-
-          const id = generateId(body.agent, body.file, chunk);
-
-          vectors.push({
-            id,
-            values: embeddingResp.data[0],
-            metadata: {
-              agent: body.agent,
-              type: 'context',
-              source_file: body.file,
-              timestamp: new Date().toISOString(),
-              chunk_index: i,
-              raw_text: chunk,
-            } as any,
-          });
-        }
-
-        // Upsert in batches of 100
-        let totalInserted = 0;
-        for (let i = 0; i < vectors.length; i += 100) {
-          const batch = vectors.slice(i, i + 100);
-          await env.VECTORIZE.upsert(batch);
-          totalInserted += batch.length;
+        for (let i = 0; i < chunks.length; i += 100) {
+          const pending = run.chunks.filter(chunk => chunk.index >= i && chunk.index < i + 100 && chunk.status !== 'succeeded');
+          if (!pending.length) continue;
+          const vectors: VectorizeVector[] = [];
+          try {
+            for (const item of pending) {
+              const embeddingResp = await env.AI.run(
+                env.EMBEDDING_MODEL as any,
+                { text: [chunks[item.index]] },
+              ) as unknown as EmbeddingResponse;
+              vectors.push({
+                id: item.id,
+                values: embeddingResp.data[0],
+                metadata: {
+                  agent: body.agent,
+                  type: 'context',
+                  source_file: body.file,
+                  timestamp: new Date().toISOString(),
+                  chunk_index: item.index,
+                  raw_text: chunks[item.index],
+                } as any,
+              });
+            }
+            await env.VECTORIZE.upsert(vectors);
+            for (const item of pending) {
+              item.status = 'succeeded';
+              item.retryable = false;
+              delete item.error;
+            }
+          } catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+            for (const item of pending) {
+              item.status = 'failed';
+              item.retryable = true;
+              item.error = message.slice(0, 200);
+            }
+          }
+          run.succeeded = run.chunks.filter(chunk => chunk.status === 'succeeded').length;
+          run.failed = run.total - run.succeeded;
+          run.retryable = run.chunks.filter(chunk => chunk.retryable).length;
+          run.status = indexRunStatus(run.succeeded, run.failed);
+          run.updated_at = new Date().toISOString();
+          await writeIndexRun(bucket, run);
         }
 
         return jsonResponse({
-          file: body.file,
-          chunks: vectors.length,
-          indexed: totalInserted,
-        }, {}, corsHeaders);
+          run_id: run.run_id,
+          file: run.file,
+          status: run.status,
+          total: run.total,
+          succeeded: run.succeeded,
+          failed: run.failed,
+          retryable: run.retryable,
+          attempts: run.attempts,
+          chunks: run.chunks,
+        }, { status: run.failed ? 207 : 200 }, corsHeaders);
+      }
+
+      const runMatch = path.match(/^\/index-runs\/([a-f0-9]{32})$/);
+      if (runMatch && request.method === 'GET') {
+        const run = await readIndexRun(env.R2_MEMORY, runMatch[1]);
+        return run
+          ? jsonResponse(run, {}, corsHeaders)
+          : jsonResponse({ error: 'Index run not found' }, { status: 404 }, corsHeaders);
       }
 
       // ================================
