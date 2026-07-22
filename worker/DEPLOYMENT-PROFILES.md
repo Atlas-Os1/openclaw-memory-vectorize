@@ -49,17 +49,22 @@ npx wrangler deploy --config wrangler.megenie.jsonc
 - Vectorize: `agent-memories`
 - Allowed agent identity: `cleo`
 
-### Trading archive plane
+### Trading archive plane — Ansem
 
-- Implementation extension SHA: `e0cccf0a581db65abf4df696ee4b35e675e0e7c4`
+- Worker: `ansem-memory-worker`
+- URL: https://ansem-memory-worker.srvcflo.workers.dev
+- Version: `ff1742f0-b071-4932-a3e0-098e3037652c`
+- Config: `worker/wrangler.ansem.jsonc`
+- Agent identity: `ansem`
+- Implementation extension SHA: recorded in the current Trading archive commit.
 - `R2_TRADING_MEMORY`: `trading-memory`
 - `R2_TRADING_FILES`: `trading-files`
-- Archive endpoint: `POST /trading/archive` (Cleo-only, authenticated)
+- Archive endpoint: `POST /trading/archive` (Ansem-only, authenticated)
 - Long-term source indexing: `POST /index-file` with `source_bucket` set to `trading-memory` or `trading-files` and an exact `key`
-- Retention procedure: `C:\Users\Minte\Desktop\dev-code\Trading\scripts\offload_old_trading.py --days 7 --apply --delete`
+- Retention procedure: `C:\Users\Minte\Desktop\dev-code\Trading\scripts\offload_old_trading.py --profile ansem --agent ansem --days 7 --apply --delete`
 - Manifests and briefs archive to `trading-memory`; event artifacts archive to `trading-files`.
 - Local deletion occurs only after archive and indexing succeed. Non-UTF-8 files are retained locally.
-- Verified run: 189 text artifacts archived, indexed, and removed locally; two PNGs retained intentionally.
+- Verified run: 189 text artifacts archived, indexed as `agent: ansem`, and removed locally; two PNGs retained intentionally.
 
 ### Atlas-Lanes plane
 

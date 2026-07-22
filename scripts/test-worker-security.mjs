@@ -39,6 +39,7 @@ const tradingCalls = { filesPut: 0, memoryPut: 0 };
 const tradingEnv = {
   ...env,
   ALLOWED_AGENTS: 'cleo',
+  TRADING_ARCHIVE_AGENT: 'cleo',
   R2_TRADING_FILES: { put: async () => { tradingCalls.filesPut++; }, get: async () => fileObject },
   R2_TRADING_MEMORY: { put: async () => { tradingCalls.memoryPut++; }, get: async () => fileObject },
 };

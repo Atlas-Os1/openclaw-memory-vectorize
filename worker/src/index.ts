@@ -18,6 +18,7 @@ export interface Env {
   EMBEDDING_MODEL: string;
   GATEWAY_TOKEN?: string;
   ALLOWED_AGENTS?: string;
+  TRADING_ARCHIVE_AGENT?: string;
   WORKER_SERVICE_NAME?: string;
 }
 
@@ -184,8 +185,9 @@ export default {
         if (authError) return authError;
 
         const body = await request.json() as { agent?: string; bucket?: 'files' | 'memory'; key?: string; content?: string };
-        if (body.agent !== 'cleo') {
-          return jsonResponse({ error: 'Trading archive is restricted to the Cleo plane' }, { status: 403 }, corsHeaders);
+        const archiveAgent = env.TRADING_ARCHIVE_AGENT || env.ALLOWED_AGENTS;
+        if (body.agent !== archiveAgent) {
+          return jsonResponse({ error: 'Trading archive is restricted to its configured agent plane' }, { status: 403 }, corsHeaders);
         }
         if (body.bucket !== 'files' && body.bucket !== 'memory') {
           return jsonResponse({ error: 'bucket must be files or memory' }, { status: 400 }, corsHeaders);

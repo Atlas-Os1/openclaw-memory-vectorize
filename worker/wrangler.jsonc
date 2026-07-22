@@ -37,6 +37,7 @@
   "vars": {
     "EMBEDDING_MODEL": "@cf/baai/bge-base-en-v1.5",
     "ALLOWED_AGENTS": "cleo",
-    "WORKER_SERVICE_NAME": "openclaw-memory-worker"
+    "WORKER_SERVICE_NAME": "openclaw-memory-worker",
+    "TRADING_ARCHIVE_AGENT": "cleo"
   }
 }
