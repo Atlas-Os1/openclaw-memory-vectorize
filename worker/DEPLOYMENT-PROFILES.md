@@ -25,21 +25,32 @@ All deployments require the profile-specific `GATEWAY_TOKEN` secret. Never commi
 Repository: `Atlas-Os1/openclaw-memory-vectorize`
 Implementation branch: `cleo/storage-plane-hardening`
 Base: `33c2f106fca9ff5131356b782d759e657d6faec9`
-Final implementation SHA: `24f1374aea51a07106099e950a6037793680dce8`
+Evidence target SHA: `f738c86e270a8d3868111f98e9d3eb888be04e04`
+Deployment implementation SHA: `24f1374aea51a07106099e950a6037793680dce8` (ancestor; the evidence target is documentation-only)
 Comparison base: `33c2f106fca9ff5131356b782d759e657d6faec9`
 Verified changed files: `README.md`, `plugin/index.ts`, `scripts/test-worker-security.mjs`, `worker/DEPLOYMENT-PROFILES.md`, `worker/package.json`, `worker/src/index.ts`, `worker/src/policy.ts`, `worker/wrangler.ansem.jsonc`, `worker/wrangler.atlas.jsonc`, `worker/wrangler.jsonc`, `worker/wrangler.megenie.jsonc`.
 The deployment versions below were deployed from the implementation tree before this documentation-only evidence update.
 
-Commands completed successfully from `worker/`:
+Commands completed successfully from `worker/` against the deployment implementation tree (`24f1374`, exit status shown):
 
 ```bash
 npm ci
+# exit 0
 npm test
+# exit 0
 npm run typecheck
+# exit 0
 npx wrangler deploy --config wrangler.jsonc
+# exit 0; deployed version recorded below
 npx wrangler deploy --config wrangler.atlas.jsonc
+# exit 0; deployed version recorded below
 npx wrangler deploy --config wrangler.megenie.jsonc
+# exit 0; deployed version recorded below
+npx wrangler deploy --config wrangler.ansem.jsonc
+# exit 0; deployed version recorded below
 ```
+
+Checkout evidence: `C:\Users\Minte\Desktop\dev-code\openclaw-memory-vectorize-clean`, branch `cleo/storage-plane-hardening`, clean before the evidence-only commit. `git diff --check`: exit 0. The deployment and live checks map to the implementation ancestor because the reviewed target commit changes documentation only.
 
 ### Hermes/Cleo plane
 
