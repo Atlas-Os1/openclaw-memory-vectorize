@@ -242,12 +242,13 @@ const memoryVectorizePlugin = {
           const { query, agent, limit = 5 } = params as { query: string; agent?: string; limit?: number };
 
           try {
-            const results = await client.query(query, { agent, topK: limit, minScore: 0.4 });
+            const targetAgent = agent ?? getAgentId();
+            const results = await client.query(query, { agent: targetAgent, topK: limit, minScore: 0.4 });
 
             if (results.count === 0) {
               return {
                 content: [{ type: "text", text: "No relevant memories found." }],
-                details: { count: 0 },
+                details: { count: 0, agent: targetAgent },
               };
             }
 
@@ -260,7 +261,7 @@ const memoryVectorizePlugin = {
 
             return {
               content: [{ type: "text", text: `Found ${results.count} memories:\n\n${text}` }],
-              details: { count: results.count, memories: results.matches },
+              details: { count: results.count, agent: targetAgent, memories: results.matches },
             };
           } catch (err) {
             return {

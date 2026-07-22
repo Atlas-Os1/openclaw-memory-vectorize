@@ -161,7 +161,8 @@ curl https://openclaw-memory-worker.YOUR_SUBDOMAIN.workers.dev/health
 # Test query (will return empty initially)
 curl -X POST https://openclaw-memory-worker.YOUR_SUBDOMAIN.workers.dev/query \
   -H "Content-Type: application/json" \
-  -d '{"query": "test", "topK": 1}'
+  -H "Authorization: Bearer $GATEWAY_TOKEN" \
+  -d '{"query": "test", "agent": "cleo", "topK": 1}'
 
 # Expected: {"query":"test","count":0,"matches":[]}
 ```
