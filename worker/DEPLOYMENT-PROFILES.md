@@ -53,7 +53,7 @@ npx wrangler deploy --config wrangler.megenie.jsonc
 
 - Worker: `ansem-memory-worker`
 - URL: https://ansem-memory-worker.srvcflo.workers.dev
-- Version: `ff1742f0-b071-4932-a3e0-098e3037652c`
+- Version: `b228eeae-3593-4b09-a138-3f17470ea639`
 - Config: `worker/wrangler.ansem.jsonc`
 - Agent identity: `ansem`
 - Implementation extension SHA: recorded in the current Trading archive commit.

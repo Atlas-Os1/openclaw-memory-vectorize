@@ -186,7 +186,7 @@ export default {
 
         const body = await request.json() as { agent?: string; bucket?: 'files' | 'memory'; key?: string; content?: string };
         const archiveAgent = env.TRADING_ARCHIVE_AGENT || env.ALLOWED_AGENTS;
-        if (body.agent !== archiveAgent) {
+        if (!archiveAgent || body.agent !== archiveAgent) {
           return jsonResponse({ error: 'Trading archive is restricted to its configured agent plane' }, { status: 403 }, corsHeaders);
         }
         if (body.bucket !== 'files' && body.bucket !== 'memory') {
@@ -203,7 +203,7 @@ export default {
         if (!bucket) return jsonResponse({ error: 'Trading R2 binding is not configured' }, { status: 503 }, corsHeaders);
         await bucket.put(body.key, body.content, {
           httpMetadata: { contentType: 'application/octet-stream' },
-          customMetadata: { source: 'local-trading-offload', archived_at: new Date().toISOString(), agent: 'cleo' },
+          customMetadata: { source: 'local-trading-offload', archived_at: new Date().toISOString(), agent: archiveAgent },
         });
         return jsonResponse({ archived: true, bucket: body.bucket, key: body.key }, { status: 201 }, corsHeaders);
       }
