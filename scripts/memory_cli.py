@@ -108,7 +108,12 @@ def _request(method: str, path: str, body: dict | None = None, timeout: float = 
     try:
         with urllib.request.urlopen(req, timeout=timeout) as resp:
             raw = resp.read().decode("utf-8")
-            return {"status": resp.status, "body": json.loads(raw) if raw else {}}
+            try:
+                parsed = json.loads(raw) if raw else {}
+            except json.JSONDecodeError as exc:
+                print(f"Worker returned invalid JSON from {url}: {exc}", file=sys.stderr)
+                sys.exit(2)
+            return {"status": resp.status, "body": parsed}
     except urllib.error.HTTPError as exc:
         raw = exc.read().decode("utf-8", errors="replace")
         try:
@@ -217,19 +222,20 @@ def cmd_index(args: argparse.Namespace) -> int:
     report = _index_one_agent(agent, args.days)
     if args.json:
         print(json.dumps(report))
-    else:
-        print(f"Indexing {agent}:")
-        for f in report["files"]:
-            marker = "ok" if f["ok"] else f"FAILED ({f['error']})"
-            print(f"  {f['file']}: {f['chunks']} chunks  [{marker}]")
-    return 0
+        return 2 if _has_failures([report]) else 0
+
+    print(f"Indexing {agent}:")
+    for f in report["files"]:
+        marker = "ok" if f["ok"] else f"FAILED ({f['error']})"
+        print(f"  {f['file']}: {f['chunks']} chunks  [{marker}]")
+    return 2 if _has_failures([report]) else 0
 
 
 def cmd_index_all(args: argparse.Namespace) -> int:
     reports = [_index_one_agent(agent, args.days) for agent in KNOWN_AGENTS]
     if args.json:
         print(json.dumps(reports))
-        return 0
+        return 2 if _has_failures(reports) else 0
 
     for report in reports:
         print(f"Indexing {report['agent']}:")
@@ -237,7 +243,11 @@ def cmd_index_all(args: argparse.Namespace) -> int:
             marker = "ok" if f["ok"] else f"FAILED ({f['error']})"
             print(f"  {f['file']}: {f['chunks']} chunks  [{marker}]")
     print("Done.")
-    return 0
+    return 2 if _has_failures(reports) else 0
+
+
+def _has_failures(reports: list[dict]) -> bool:
+    return any(not file_report.get("ok") for report in reports for file_report in report.get("files", []))
 
 
 def build_parser() -> argparse.ArgumentParser:

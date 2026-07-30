@@ -86,21 +86,51 @@ class _OpenClawWorkerClient:
         return headers
 
     def post(self, path: str, body: Dict[str, Any], timeout: float = 8.0) -> Any:
-        import requests
+        try:
+            import requests
 
-        response = requests.post(
+            response = requests.post(
+                f"{self.base_url}{path}",
+                json=body,
+                headers=self._headers(),
+                timeout=timeout,
+            )
+            try:
+                payload = response.json()
+            except Exception:
+                payload = response.text
+            if not response.ok:
+                raise RuntimeError(f"OpenClaw worker {path} failed ({response.status_code}): {payload}")
+            return payload
+        except ModuleNotFoundError:
+            return self._post_urllib(path, body, timeout)
+
+    def _post_urllib(self, path: str, body: Dict[str, Any], timeout: float) -> Any:
+        import urllib.error
+        import urllib.request
+
+        data = json.dumps(body).encode("utf-8")
+        req = urllib.request.Request(
             f"{self.base_url}{path}",
-            json=body,
+            data=data,
             headers=self._headers(),
-            timeout=timeout,
+            method="POST",
         )
         try:
-            payload = response.json()
-        except Exception:
-            payload = response.text
-        if not response.ok:
-            raise RuntimeError(f"OpenClaw worker {path} failed ({response.status_code}): {payload}")
-        return payload
+            with urllib.request.urlopen(req, timeout=timeout) as response:
+                raw = response.read().decode("utf-8")
+                return json.loads(raw) if raw else {}
+        except urllib.error.HTTPError as exc:
+            raw = exc.read().decode("utf-8", errors="replace")
+            try:
+                payload: Any = json.loads(raw)
+            except json.JSONDecodeError:
+                payload = raw
+            raise RuntimeError(f"OpenClaw worker {path} failed ({exc.code}): {payload}") from exc
+        except urllib.error.URLError as exc:
+            raise RuntimeError(f"OpenClaw worker {path} failed: {exc.reason}") from exc
+        except json.JSONDecodeError as exc:
+            raise RuntimeError(f"OpenClaw worker {path} returned invalid JSON: {exc}") from exc
 
 
 class OpenClawMemoryVectorizeProvider(MemoryProvider):
@@ -284,11 +314,12 @@ class OpenClawMemoryVectorizeProvider(MemoryProvider):
     def _index(self, content: str, *, memory_type: str = "context", source_file: str = "hermes") -> Any:
         if not self._client:
             raise RuntimeError("OpenClaw memory client is not initialized")
-        safe_type = memory_type if memory_type in MEMORY_TYPES else "context"
+        if memory_type not in MEMORY_TYPES:
+            raise ValueError(f"Invalid memory_type: {memory_type}")
         return self._client.post("/index", {
             "agent": self._agent_id,
             "text": content,
-            "type": safe_type,
+            "type": memory_type,
             "source_file": source_file,
         }, timeout=8.0)
 
