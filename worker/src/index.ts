@@ -64,6 +64,28 @@ function jsonResponse(payload: unknown, init: ResponseInit = {}, corsHeaders: Re
   });
 }
 
+/**
+ * Constant-time string comparison for bearer tokens.
+ *
+ * A short-circuit `!==` comparison leaks how many leading characters matched
+ * through response timing. This XOR loop touches every byte up to the longer
+ * input and folds the length difference into the result, so comparison time
+ * depends only on input length, never on where a mismatch occurred.
+ */
+function timingSafeTokenEqual(a: string, b: string): boolean {
+  const encoder = new TextEncoder();
+  const aBytes = encoder.encode(a);
+  const bBytes = encoder.encode(b);
+  const len = Math.max(aBytes.length, bBytes.length);
+  let diff = aBytes.length ^ bBytes.length;
+  for (let i = 0; i < len; i++) {
+    const x = i < aBytes.length ? aBytes[i] : 0;
+    const y = i < bBytes.length ? bBytes[i] : 0;
+    diff |= x ^ y;
+  }
+  return diff === 0;
+}
+
 function requireAuth(request: Request, env: Env, corsHeaders: Record<string, string>): Response | null {
   if (!PROTECTED_METHODS.has(request.method)) {
     return null;
@@ -80,7 +102,7 @@ function requireAuth(request: Request, env: Env, corsHeaders: Record<string, str
   const authHeader = request.headers.get('Authorization') || '';
   const supplied = authHeader.replace(/^Bearer\s+/i, '').trim();
 
-  if (!supplied || supplied !== env.GATEWAY_TOKEN) {
+  if (!supplied || !timingSafeTokenEqual(supplied, env.GATEWAY_TOKEN)) {
     return jsonResponse({ error: 'Unauthorized' }, { status: 401 }, corsHeaders);
   }
 
@@ -112,11 +134,16 @@ function contentTypeForPath(path: string): string {
   return 'application/octet-stream';
 }
 
-// Utility: Generate deterministic ID from content
-function generateId(agent: string, source: string, text: string): string {
-  const hash = Array.from(text)
-    .reduce((h, c) => ((h << 5) - h + c.charCodeAt(0)) | 0, 0)
-    .toString(16);
+// Utility: Generate deterministic ID from content.
+// Uses a truncated SHA-256 digest: the old 32-bit djb2 hash collided often
+// enough that two different chunks could silently overwrite each other in
+// Vectorize (upsert semantics). 64 bits of SHA-256 makes accidental
+// collision negligible while keeping IDs short and deterministic.
+async function generateId(agent: string, source: string, text: string): Promise<string> {
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
+  const hash = Array.from(new Uint8Array(digest).subarray(0, 8))
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('');
   return `${agent}:${source}:${hash}`;
 }
 
@@ -276,7 +303,7 @@ export default {
             { text: [chunk] }
           ) as unknown as EmbeddingResponse;
 
-          const id = generateId(body.agent, body.source_file || 'manual', chunk);
+          const id = await generateId(body.agent, body.source_file || 'manual', chunk);
 
           vectors.push({
             id,
@@ -342,7 +369,7 @@ export default {
           { text: [body.content] }
         ) as unknown as EmbeddingResponse;
 
-        const id = generateId(body.agent, 'capture', body.content);
+        const id = await generateId(body.agent, 'capture', body.content);
 
         const vector: VectorizeVector = {
           id,
@@ -379,14 +406,8 @@ export default {
           return jsonResponse({ error: 'agent and file are required' }, { status: 400 }, corsHeaders);
         }
 
-        // Get R2 bucket based on agent
-        let bucket: R2Bucket;
-        switch (body.agent) {
-          case 'cleo': bucket = env.R2_MEMORY; break;
-          case 'lilbeaver': bucket = env.R2_MEMORY; break;
-          default:
-            bucket = env.R2_MEMORY; break; // any hermes agent shares the memory bucket
-        }
+        // All agents share the same memory bucket (R2_MEMORY).
+        const bucket = env.R2_MEMORY;
 
         // Fetch file from R2
         const obj = await bucket.get(body.agent + '/' + body.file);
@@ -408,7 +429,7 @@ export default {
             { text: [chunk] }
           ) as unknown as EmbeddingResponse;
 
-          const id = generateId(body.agent, body.file, chunk);
+          const id = await generateId(body.agent, body.file, chunk);
 
           vectors.push({
             id,
@@ -443,9 +464,11 @@ export default {
       // GET /stats - Index statistics
       // ================================
       if (path === '/stats' && request.method === 'GET') {
-        // Query a dummy vector to get index info
+        // Vectorize has no count/describe API, so probe with a zero-vector
+        // query. A successful probe proves the index is reachable; a throw
+        // surfaces as a 500 via the outer catch instead of a fake "healthy".
         const dummyEmbedding = new Array(768).fill(0);
-        const results = await env.VECTORIZE.query(dummyEmbedding, {
+        const probe = await env.VECTORIZE.query(dummyEmbedding, {
           topK: 1,
           returnMetadata: 'none',
         });
@@ -455,8 +478,8 @@ export default {
           dimensions: 768,
           metric: 'cosine',
           model: env.EMBEDDING_MODEL,
-          // Vectorize doesn't expose total count directly
-          status: 'healthy',
+          probe_matches: probe.matches.length,
+          status: 'ok',
         }, {}, corsHeaders);
       }
 

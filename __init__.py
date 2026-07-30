@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 import threading
 from typing import Any, Dict, List, Optional
 
@@ -82,7 +83,12 @@ class _OpenClawWorkerClient:
             "User-Agent": "Hermes-OpenClaw-MemoryProvider/1.0",
         }
         if self.token:
-            headers["Authorization"] = f"Bearer {self.token.replace('Bearer ', '')}"
+            # Strip a leading "Bearer " prefix only (anchored, case-insensitive),
+            # matching the TS plugin (plugin/index.ts). A bare str.replace would
+            # remove every occurrence anywhere in the token, corrupting tokens
+            # that legitimately contain the substring.
+            bare_token = re.sub(r"^Bearer\s+", "", self.token, flags=re.IGNORECASE).strip()
+            headers["Authorization"] = f"Bearer {bare_token}"
         return headers
 
     def post(self, path: str, body: Dict[str, Any], timeout: float = 8.0) -> Any:
@@ -267,26 +273,40 @@ class OpenClawMemoryVectorizeProvider(MemoryProvider):
             parts.append(f"Assistant: {assistant_content}")
         return "\n\n".join(parts).strip()
 
-    def _capture(self, content: str, *, source_file: str, memory_type: str = "context") -> Any:
+    def _capture(
+        self,
+        content: str,
+        *,
+        source_file: str,
+        memory_type: str = "context",
+        agent: Optional[str] = None,
+    ) -> Any:
         if not self._client:
             raise RuntimeError("OpenClaw memory client is not initialized")
         body = {
-            "agent": self._agent_id,
+            "agent": agent or self._agent_id,
             "turn_type": "assistant",
             "content": content,
             "classification": memory_type,
         }
         result = self._client.post("/capture", body, timeout=8.0)
         if isinstance(result, dict) and result.get("captured") is False:
-            return self._index(content, memory_type=memory_type, source_file=source_file)
+            return self._index(content, memory_type=memory_type, source_file=source_file, agent=agent)
         return result
 
-    def _index(self, content: str, *, memory_type: str = "context", source_file: str = "hermes") -> Any:
+    def _index(
+        self,
+        content: str,
+        *,
+        memory_type: str = "context",
+        source_file: str = "hermes",
+        agent: Optional[str] = None,
+    ) -> Any:
         if not self._client:
             raise RuntimeError("OpenClaw memory client is not initialized")
         safe_type = memory_type if memory_type in MEMORY_TYPES else "context"
         return self._client.post("/index", {
-            "agent": self._agent_id,
+            "agent": agent or self._agent_id,
             "text": content,
             "type": safe_type,
             "source_file": source_file,
@@ -345,15 +365,19 @@ class OpenClawMemoryVectorizeProvider(MemoryProvider):
                 return tool_error("Missing required parameter: content")
             memory_type = args.get("memory_type") or "context"
             source_file = args.get("source_file") or "hermes-tool"
-            previous_agent = self._agent_id
-            if args.get("agent"):
-                self._agent_id = args["agent"]
+            # Pass the per-call agent override through as a parameter instead of
+            # mutating self._agent_id: background daemon threads (prefetch/sync)
+            # read self._agent_id concurrently and would index under the wrong
+            # agent during the mutation window.
             try:
-                return _json_result(self._index(content, memory_type=memory_type, source_file=source_file))
+                return _json_result(self._index(
+                    content,
+                    memory_type=memory_type,
+                    source_file=source_file,
+                    agent=args.get("agent"),
+                ))
             except Exception as exc:
                 return tool_error(f"OpenClaw memory write failed: {exc}")
-            finally:
-                self._agent_id = previous_agent
 
         return tool_error(f"Unknown tool: {tool_name}")
 

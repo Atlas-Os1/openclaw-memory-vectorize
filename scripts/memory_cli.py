@@ -100,9 +100,13 @@ def _request(method: str, path: str, body: dict | None = None, timeout: float = 
         "Content-Type": "application/json",
         "User-Agent": "openclaw-memory-cli/1.0",
     }
-    token = _token()
-    if token:
-        headers["Authorization"] = f"Bearer {token}"
+    # The worker only authenticates POST/PUT/PATCH/DELETE; don't send the
+    # bearer token on unauthenticated GETs (/health, /stats) where it would
+    # be needlessly exposed in logs.
+    if method.upper() in {"POST", "PUT", "PATCH", "DELETE"}:
+        token = _token()
+        if token:
+            headers["Authorization"] = f"Bearer {token}"
 
     req = urllib.request.Request(url, data=data, headers=headers, method=method)
     try:
