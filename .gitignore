@@ -4,3 +4,5 @@ node_modules/
 *.log
 .DS_Store
 scripts/__pycache__/
+# Wrangler dry-run build output — generated, never commit
+worker/dist-dry-run/
