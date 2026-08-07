@@ -1,4 +1,6 @@
-﻿/**
+﻿import { validateAgent, validateFileKey } from './policy';
+
+/**
  * Atlas Memory Worker
  *
  * Semantic memory layer for agents using Cloudflare Vectorize + Workers AI.
@@ -10,12 +12,21 @@ export interface Env {
   AI: Ai;
   R2_MEMORY: R2Bucket;
   R2_FILES: R2Bucket;
-  // (third bucket removed; hermes uses R2_MEMORY + R2_FILES)
+  R2_TRADING_MEMORY?: R2Bucket;
+  R2_TRADING_FILES?: R2Bucket;
+  // Memory artifacts use R2_MEMORY; shared/file artifacts use R2_FILES.
   EMBEDDING_MODEL: string;
   GATEWAY_TOKEN?: string;
+  ALLOWED_AGENTS?: string;
+  TRADING_ARCHIVE_AGENT?: string;
+  WORKER_SERVICE_NAME?: string;
 }
 
 const PROTECTED_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
+function requireKnownAgent(agent: string | undefined, env: Env, corsHeaders: Record<string, string>): Response | null {
+  const error = validateAgent(agent, env.ALLOWED_AGENTS);
+  return error ? jsonResponse({ error }, { status: 400 }, corsHeaders) : null;
+}
 
 interface EmbeddingResponse {
   shape: number[];
@@ -64,8 +75,8 @@ function jsonResponse(payload: unknown, init: ResponseInit = {}, corsHeaders: Re
   });
 }
 
-function requireAuth(request: Request, env: Env, corsHeaders: Record<string, string>): Response | null {
-  if (!PROTECTED_METHODS.has(request.method)) {
+function requireAuth(request: Request, env: Env, corsHeaders: Record<string, string>, force = false): Response | null {
+  if (!force && !PROTECTED_METHODS.has(request.method)) {
     return null;
   }
 
@@ -123,7 +134,13 @@ function generateId(agent: string, source: string, text: string): string {
 // Utility: Chunk text into indexable segments
 function chunkText(text: string, maxChunkSize = 500): string[] {
   const chunks: string[] = [];
-  const paragraphs = text.split(/\n\n+/);
+  const paragraphs = text.split(/\n\n+/).flatMap((para) => {
+    const parts: string[] = [];
+    for (let start = 0; start < para.length; start += maxChunkSize) {
+      parts.push(para.slice(start, start + maxChunkSize));
+    }
+    return parts;
+  });
 
   let currentChunk = '';
   for (const para of paragraphs) {
@@ -161,11 +178,49 @@ export default {
       const fileRoute = parseAgentFilePath(path);
 
       // ================================
+      // POST /trading/archive - archive local Trading artifacts in R2
+      // ================================
+      if (path === '/trading/archive' && request.method === 'POST') {
+        const authError = requireAuth(request, env, corsHeaders);
+        if (authError) return authError;
+
+        const body = await request.json() as { agent?: string; bucket?: 'files' | 'memory'; key?: string; content?: string };
+        const archiveAgent = env.TRADING_ARCHIVE_AGENT || env.ALLOWED_AGENTS;
+        const agentError = requireKnownAgent(body.agent, env, corsHeaders);
+        if (agentError) return agentError;
+        if (!archiveAgent || body.agent !== archiveAgent) {
+          return jsonResponse({ error: 'Trading archive is restricted to its configured agent plane' }, { status: 403 }, corsHeaders);
+        }
+        if (body.bucket !== 'files' && body.bucket !== 'memory') {
+          return jsonResponse({ error: 'bucket must be files or memory' }, { status: 400 }, corsHeaders);
+        }
+        const keyError = validateFileKey(body.key);
+        if (keyError || body.key?.startsWith('trading/') !== true) {
+          return jsonResponse({ error: keyError || 'Trading archive keys must start with trading/' }, { status: 400 }, corsHeaders);
+        }
+        if (typeof body.content !== 'string') {
+          return jsonResponse({ error: 'content is required' }, { status: 400 }, corsHeaders);
+        }
+        const bucket = body.bucket === 'files' ? env.R2_TRADING_FILES : env.R2_TRADING_MEMORY;
+        if (!bucket) return jsonResponse({ error: 'Trading R2 binding is not configured' }, { status: 503 }, corsHeaders);
+        await bucket.put(body.key, body.content, {
+          httpMetadata: { contentType: 'application/octet-stream' },
+          customMetadata: { source: 'local-trading-offload', archived_at: new Date().toISOString(), agent: archiveAgent },
+        });
+        return jsonResponse({ archived: true, bucket: body.bucket, key: body.key }, { status: 201 }, corsHeaders);
+      }
+
+      // ================================
       // GET/PUT /agents/:agent/files/* - R2 memory file mirror
       // ================================
       if (fileRoute && request.method === 'GET') {
+        const authError = requireAuth(request, env, corsHeaders, true);
+        if (authError) return authError;
+        const agentError = requireKnownAgent(fileRoute.agent, env, corsHeaders);
+        if (agentError) return agentError;
+
         const objectKey = `${fileRoute.agent}/${fileRoute.file}`;
-        const obj = await env.R2_MEMORY.get(objectKey);
+        const obj = await env.R2_FILES.get(objectKey);
         if (!obj) {
           return jsonResponse({ error: `File not found: ${fileRoute.file}` }, { status: 404 }, corsHeaders);
         }
@@ -184,10 +239,12 @@ export default {
       if (fileRoute && request.method === 'PUT') {
         const authError = requireAuth(request, env, corsHeaders);
         if (authError) return authError;
+        const agentError = requireKnownAgent(fileRoute.agent, env, corsHeaders);
+        if (agentError) return agentError;
 
         const objectKey = `${fileRoute.agent}/${fileRoute.file}`;
         const contentType = request.headers.get('Content-Type') || contentTypeForPath(fileRoute.file);
-        await env.R2_MEMORY.put(objectKey, request.body, {
+        await env.R2_FILES.put(objectKey, request.body, {
           httpMetadata: { contentType },
           customMetadata: {
             agent: fileRoute.agent,
@@ -213,9 +270,11 @@ export default {
 
         const body: QueryRequest = await request.json();
 
-        if (!body.query) {
-          return jsonResponse({ error: 'query is required' }, { status: 400 }, corsHeaders);
+        if (!body.query || !body.agent) {
+          return jsonResponse({ error: 'query and agent are required' }, { status: 400 }, corsHeaders);
         }
+        const agentError = requireKnownAgent(body.agent, env, corsHeaders);
+        if (agentError) return agentError;
 
         // Generate embedding for query
         const embeddingResp = await env.AI.run(
@@ -262,6 +321,8 @@ export default {
         if (!body.agent || !body.text) {
           return jsonResponse({ error: 'agent and text are required' }, { status: 400 }, corsHeaders);
         }
+        const agentError = requireKnownAgent(body.agent, env, corsHeaders);
+        if (agentError) return agentError;
 
         // Chunk the text
         const chunks = chunkText(body.text);
@@ -314,6 +375,8 @@ export default {
         if (!body.agent || !body.content) {
           return jsonResponse({ error: 'agent and content are required' }, { status: 400 }, corsHeaders);
         }
+        const agentError = requireKnownAgent(body.agent, env, corsHeaders);
+        if (agentError) return agentError;
 
         // If not pre-classified, use simple heuristics
         let memoryType: MemoryMetadata['type'] = 'context';
@@ -373,25 +436,27 @@ export default {
         const authError = requireAuth(request, env, corsHeaders);
         if (authError) return authError;
 
-        const body = await request.json() as { agent: string; file: string };
+        const body = await request.json() as { agent: string; file?: string; key?: string; source_bucket?: 'files' | 'memory' | 'trading-files' | 'trading-memory' };
 
-        if (!body.agent || !body.file) {
+        const objectKey = body.key || body.file;
+        if (!body.agent || !objectKey) {
           return jsonResponse({ error: 'agent and file are required' }, { status: 400 }, corsHeaders);
         }
-
-        // Get R2 bucket based on agent
-        let bucket: R2Bucket;
-        switch (body.agent) {
-          case 'cleo': bucket = env.R2_MEMORY; break;
-          case 'lilbeaver': bucket = env.R2_MEMORY; break;
-          default:
-            bucket = env.R2_MEMORY; break; // any hermes agent shares the memory bucket
-        }
+        const agentError = requireKnownAgent(body.agent, env, corsHeaders);
+        if (agentError) return agentError;
+        const fileError = validateFileKey(objectKey);
+        if (fileError) return jsonResponse({ error: fileError }, { status: 400 }, corsHeaders);
 
         // Fetch file from R2
-        const obj = await bucket.get(body.agent + '/' + body.file);
+        const sourceBucket = body.source_bucket === 'memory' ? env.R2_MEMORY
+          : body.source_bucket === 'trading-files' ? env.R2_TRADING_FILES
+          : body.source_bucket === 'trading-memory' ? env.R2_TRADING_MEMORY
+          : env.R2_FILES;
+        if (!sourceBucket) return jsonResponse({ error: 'Requested R2 source bucket is not configured' }, { status: 503 }, corsHeaders);
+        const resolvedKey = body.source_bucket?.startsWith('trading-') ? objectKey : `${body.agent}/${objectKey}`;
+        const obj = await sourceBucket.get(resolvedKey);
         if (!obj) {
-          return jsonResponse({ error: `File not found: ${body.file}` }, { status: 404 }, corsHeaders);
+          return jsonResponse({ error: `File not found: ${objectKey}` }, { status: 404 }, corsHeaders);
         }
 
         const text = await obj.text();
@@ -408,7 +473,7 @@ export default {
             { text: [chunk] }
           ) as unknown as EmbeddingResponse;
 
-          const id = generateId(body.agent, body.file, chunk);
+          const id = generateId(body.agent, objectKey.slice(-32), chunk);
 
           vectors.push({
             id,
@@ -416,7 +481,7 @@ export default {
             metadata: {
               agent: body.agent,
               type: 'context',
-              source_file: body.file,
+              source_file: objectKey,
               timestamp: new Date().toISOString(),
               chunk_index: i,
               raw_text: chunk,
@@ -433,7 +498,7 @@ export default {
         }
 
         return jsonResponse({
-          file: body.file,
+          file: objectKey,
           chunks: vectors.length,
           indexed: totalInserted,
         }, {}, corsHeaders);
@@ -466,7 +531,7 @@ export default {
       if (path === '/health' || path === '/') {
         return jsonResponse({
           status: 'ok',
-          service: 'openclaw-memory-worker',
+          service: env.WORKER_SERVICE_NAME || 'openclaw-memory-worker',
           timestamp: new Date().toISOString(),
         }, {}, corsHeaders);
       }
