@@ -1,6 +1,6 @@
 # Deployment profiles
 
-The generic `worker/wrangler.jsonc` deploys `openclaw-memory-worker` for the Hermes/Cleo plane.
+The generic `worker/wrangler.jsonc` deploys `openclaw-memory-worker` for the shared Hermes/Cleo/Scout plane.
 
 Use the tracked deployment manifests for isolated agent planes:
 
@@ -61,7 +61,7 @@ Checkout evidence: `C:\Users\Minte\Desktop\dev-code\openclaw-memory-vectorize-cl
 - `R2_MEMORY`: `hermes-memory`
 - `R2_FILES`: `hermes-files`
 - Vectorize: `agent-memories`
-- Allowed agent identity: `cleo`
+- Allowed agent identities: `cleo`, `scout`
 
 ### Trading archive plane — Ansem
 
@@ -114,6 +114,7 @@ Checkout evidence: `C:\Users\Minte\Desktop\dev-code\openclaw-memory-vectorize-cl
 - Full `npm audit` reports three high-severity transitive vulnerabilities through the Wrangler/Miniflare/Sharp development toolchain. They are not in the production Worker bundle; `npm audit fix --force` proposes a breaking Wrangler downgrade and is not applied without a compatibility review.
 - `source_bucket` defaults to `files` for `/index-file`; `source_bucket: "memory"` is an explicit compatibility path for legacy R2_MEMORY objects.
 - Unknown or unauthorized agents return HTTP 400 after authentication.
+- Scout uses the shared Hermes/Cleo plane and the same `hermes-memory` / `hermes-files` R2 bindings; its namespace is isolated by the `scout/` object-key prefix and `agent: scout` Vectorize metadata.
 
 ### Recovery
 

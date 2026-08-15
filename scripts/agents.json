@@ -1,5 +1,5 @@
 {
   "_comment": "Roster of Hermes agents for memory_cli.py. Edit this file (not memory_cli.py) when profiles are added, renamed, or retired -- there's already been one rename (default -> atlas), so treat this as living data, not a one-time list.",
-  "known_agents": ["cleo", "atlas", "dev", "lance", "bigfoot", "lil-beaver"],
+  "known_agents": ["cleo", "atlas", "dev", "lance", "bigfoot", "lil-beaver", "scout"],
   "pending_agents": ["pr-checker"]
 }
