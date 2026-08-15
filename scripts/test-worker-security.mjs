@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { existsSync, rmSync } from 'node:fs';
+import { existsSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
@@ -15,6 +15,7 @@ execFileSync(process.execPath, [
   '--outDir', out, '--module', 'commonjs', '--target', 'ES2022', '--skipLibCheck', '--types', '@cloudflare/workers-types',
 ], { cwd: worker, stdio: 'inherit' });
 assert.ok(existsSync(join(out, 'index.js')));
+writeFileSync(join(out, 'package.json'), '{"type":"commonjs"}\n');
 const module = await import(pathToFileURL(join(out, 'index.js')).href);
 const workerHandler = module.default?.fetch ? module.default : module.default?.default;
 const calls = { filesPut: 0, memoryPut: 0, filesGet: 0, memoryGet: 0 };
@@ -36,6 +37,7 @@ const env = {
   VECTORIZE: { upsert: async () => ({ inserted: 1 }), query: async () => ({ matches: [] }) },
 };
 const tradingCalls = { filesPut: 0, memoryPut: 0 };
+const scoutEnv = { ...env, ALLOWED_AGENTS: 'cleo,scout' };
 const tradingEnv = {
   ...env,
   ALLOWED_AGENTS: 'cleo',
@@ -55,6 +57,8 @@ const json = (path, body, auth = true) => request(path, {
 
 assert.equal((await workerHandler.fetch(request('/agents/megenie/files/MEMORY.md'), env, ctx)).status, 401);
 assert.equal((await workerHandler.fetch(json('/query', { query: 'hello' }), env, ctx)).status, 400);
+assert.equal((await workerHandler.fetch(json('/query', { query: 'hello', agent: 'scout' }), scoutEnv, ctx)).status, 200);
+assert.equal((await workerHandler.fetch(json('/index', { agent: 'scout', text: 'Scout memory namespace' }), scoutEnv, ctx)).status, 200);
 assert.equal((await workerHandler.fetch(json('/query', { query: 'hello', agent: 'cleo' }), env, ctx)).status, 400);
 assert.equal((await workerHandler.fetch(json('/index', { agent: 'cleo', text: 'hello' }), env, ctx)).status, 400);
 assert.equal((await workerHandler.fetch(json('/capture', { agent: 'cleo', content: 'remember this decision' }), env, ctx)).status, 400);
